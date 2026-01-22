@@ -1029,6 +1029,50 @@
 
 <script>
     // ==========================================
+    // 0. [Fix] 自動載入 SweetAlert2 以解決 Google Sites 封鎖 alert 的問題
+    // ==========================================
+    (function() {
+        const script = document.createElement('script');
+        script.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
+        document.head.appendChild(script);
+    })();
+
+    // 輔助函式：統一處理訊息顯示 (取代 alert)
+    function showMsg(title, text = '', icon = 'info') {
+        if (typeof Swal !== 'undefined') {
+            return Swal.fire({ title, text, icon, confirmButtonColor: '#FDB813', confirmButtonText: '知道了' });
+        } else {
+            // 如果套件還沒載入完成，退回 console.log 以免報錯
+            console.log(`[${icon}] ${title}: ${text}`);
+            // 嘗試非阻塞通知
+            const msgBox = document.createElement('div');
+            msgBox.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:white;padding:15px 25px;border-radius:50px;z-index:9999;">${title} ${text}</div>`;
+            document.body.appendChild(msgBox);
+            setTimeout(() => msgBox.remove(), 3000);
+        }
+    }
+
+    // 輔助函式：統一處理確認對話框 (取代 confirm)
+    async function showConfirm(title, text = '') {
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: title,
+                text: text,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#2A2A2A',
+                cancelButtonColor: '#d33',
+                confirmButtonText: '確定',
+                cancelButtonText: '取消'
+            });
+            return result.isConfirmed;
+        } else {
+            // 極端情況下的 fallback (但在 Google Sites 會失效，所以依賴上面 Swal 載入)
+            return true; 
+        }
+    }
+
+    // ==========================================
     // 1. 全域變數與初始化
     // ==========================================
     let currentStep = 0;
@@ -1079,7 +1123,7 @@
 
 
 // ==========================================
-    // 修改後的 nextStep 函式 (已修復語法錯誤)
+    // 2. 頁面導航與驗證
     // ==========================================
     function nextStep() { 
         if (currentStep === 0) { 
@@ -1090,10 +1134,10 @@
             const type = document.getElementById('input-type').value;
             const referrer = document.getElementById('input-referrer').value;
 
-            if(!name || !date || !email || !type) return alert('請填寫完整基本資訊'); 
+            if(!name || !date || !email || !type) return showMsg('請填寫完整基本資訊'); 
             
             // 強制檢查是否有輸入代碼
-            if(!referrer) return alert('請輸入會員代碼才能繼續！');
+            if(!referrer) return showMsg('請輸入會員代碼才能繼續！');
 
             const btnNext = document.getElementById('btn-next');
             const originalText = document.getElementById('btn-text-main').innerText;
@@ -1112,24 +1156,24 @@
                         proceedToStep1(name, email, date, type, referrer);
                     } else {
                         // [失敗]
-                        alert('❌ 會員代碼無效！\n此代碼不在我們的會員名冊中，請確認後再試。');
+                        showMsg('❌ 會員代碼無效！', '此代碼不在我們的會員名冊中，請確認後再試。', 'error');
                     }
                 })
                 .withFailureHandler(err => {
                     setBtnLoading(btnNext, false);
                     document.getElementById('btn-text-main').innerText = originalText;
-                    alert('連線檢查失敗，請稍後再試。');
+                    showMsg('連線檢查失敗', '請稍後再試。', 'error');
                 })
                 .checkReferrerCode(referrer); 
 
             return; // 結束，等待後端回應
-        } // <--- 這裡就是之前缺少的關鍵大括號
+        } 
         
         else if (currentStep === 1) { 
             userData.locations = getStep1Data(); 
             const outs = userData.locations.filter(l => l.type === 'out'); 
             const ins = userData.locations.filter(l => l.type === 'in'); 
-            if(outs.length === 0 || ins.length === 0) return alert('請至少設定一個搬出地與一個搬入地'); 
+            if(outs.length === 0 || ins.length === 0) return showMsg('請至少設定一個搬出地與一個搬入地', '', 'warning'); 
             
             autoSaveProgress(1); // 儲存
 
@@ -1142,7 +1186,7 @@
             goToStep(3); 
         } else if (currentStep === 3) { 
             const areas = document.querySelectorAll('.area-card'); 
-            if(areas.length === 0) return alert('請至少新增一個區域 (如：臥室)'); 
+            if(areas.length === 0) return showMsg('請至少新增一個區域', '例如：臥室', 'warning'); 
             
             autoSaveProgress(3); // 儲存
             goToStep(4); 
@@ -1301,7 +1345,7 @@
             .withSuccessHandler(res => {
                 if (btnElement) setBtnLoading(btnElement, false);
                 userData.quoteResult = res; 
-                if (res.error) return alert('錯誤：' + res.error);
+                if (res.error) return showMsg('錯誤', res.error, 'error');
                 showEstimationResult(res, requestData);
 
                 setTimeout(() => {
@@ -1309,7 +1353,7 @@
                 }, 500);
             })
             .withFailureHandler(err => {
-                alert('發生錯誤：' + err);
+                showMsg('發生錯誤', err, 'error');
                 if (btnElement) setBtnLoading(btnElement, false);
             })
             .calculateFullQuote(requestData, null);
@@ -1471,7 +1515,7 @@
 
         if (!fullData.quoteResult) {
             loadingEl.classList.add('hidden');
-            alert("請先在 Step 4 點擊「產生估價單」進行計算後，再生成指南！");
+            showMsg('請先計算費用', '請在 Step 4 點擊「產生估價單」進行計算後，再生成指南！', 'warning');
             goToStep(4);
             return;
         }
@@ -1492,7 +1536,7 @@
             })
             .withFailureHandler(err => {
                 loadingEl.classList.add('hidden');
-                alert('連線錯誤：' + err);
+                showMsg('連線錯誤', err, 'error');
             })
             .generateMovingGuide(fullData); 
     }
@@ -1784,7 +1828,9 @@ function formatDomToText(container) {
     }
 
     async function handleEmailSend(btn) {
-        if (!confirm('確定要生成 PDF 指南並寄送到您的 Email 嗎？\n(過程約需 10-20 秒，請勿關閉視窗)')) return;
+        // [MOD] 使用 showConfirm 取代原生的 confirm
+        const isConfirmed = await showConfirm('確定要生成 PDF 指南並寄送到您的 Email 嗎？', '(過程約需 10-20 秒，請勿關閉視窗)');
+        if (!isConfirmed) return;
 
         setBtnLoading(btn, true);
 
@@ -1860,16 +1906,16 @@ function formatDomToText(container) {
                     setBtnLoading(btn, false);
                     document.body.classList.remove('printing-mode'); 
                     if (res.error) {
-                        alert('寄送失敗：' + res.error);
+                        showMsg('寄送失敗', res.error, 'error');
                     } else {
-                        alert(`🎉 完美 PDF 指南已寄出！\n檔名：${filename}`);
+                        showMsg('🎉 完美 PDF 指南已寄出！', `檔名：${filename}`, 'success');
                         autoSaveProgress(6, { isSent: "是 (PDF)" });
                     }
                 })
                 .withFailureHandler(err => {
                     setBtnLoading(btn, false);
                     document.body.classList.remove('printing-mode');
-                    alert('系統錯誤：' + err);
+                    showMsg('系統錯誤', err, 'error');
                 })
                 .processClientPdfAndEmail(payload);
 
@@ -1877,7 +1923,7 @@ function formatDomToText(container) {
             console.error(err);
             setBtnLoading(btn, false);
             document.body.classList.remove('printing-mode');
-            alert('生成 PDF 時發生錯誤，請截圖給工程師：' + err.message);
+            showMsg('錯誤', '生成 PDF 時發生錯誤，請截圖給工程師：' + err.message, 'error');
         }
     }
 
@@ -1887,14 +1933,14 @@ function formatDomToText(container) {
     function checkDate() { const d = document.getElementById('input-date').value; if(!d) return; const days = getDiffDays(d); const box = document.getElementById('date-alert'); box.className = 'hidden mt-3 p-3 rounded-xl text-sm border bg-gray-50 text-gray-600 font-medium'; if(days<3) { box.classList.remove('hidden'); box.innerText="🚨 急件！紅色警戒 SOP 啟動"; } else if(days<7) { box.classList.remove('hidden'); box.innerText="⚡️ 有點趕，建議盡快打包"; } }
     function getStep0Data() { return { name: document.getElementById('input-name').value, date: document.getElementById('input-date').value, type: document.getElementById('input-type').value, email: document.getElementById('input-email').value }; }
     function loadFromStorage() { const saved = localStorage.getItem('ayue_user_info'); if (saved) { const d = JSON.parse(saved); if(d.name) document.getElementById('input-name').value=d.name; if(d.email) document.getElementById('input-email').value=d.email; if(d.date) { document.getElementById('input-date').value=d.date; checkDate(); } if(d.type) { const el=document.querySelector(`.option-card[onclick*='${d.type}']`); if(el) selectType(d.type, el); } } }
-    function addLocation(type) { if(locCounts[type]>=5) return alert('最多5個'); locCounts[type]++; const tpl = document.getElementById('tpl-location-card'); const clone = tpl.content.cloneNode(true); const card = clone.querySelector('.card'); card.dataset.type = type; card.dataset.id = `${type}-${Date.now()}`; card.querySelector('.badge-type').innerText = (type==='out'?'搬出':'搬入')+' '+locCounts[type]; card.querySelector('.badge-type').classList.add(type==='out'?'bg-brand-teal':'bg-brand-yellow'); const citySel = card.querySelector('.city-select'); Object.keys(TAIWAN_DATA).forEach(c => citySel.add(new Option(c,c))); citySel.onchange = e => { const dSel = card.querySelector('.dist-select'); dSel.innerHTML='<option>區域</option>'; (TAIWAN_DATA[e.target.value]||[]).forEach(d => dSel.add(new Option(d,d))); }; document.getElementById(`${type}-list`).appendChild(card); cardImages[card.dataset.id] = []; }
+    function addLocation(type) { if(locCounts[type]>=5) return showMsg('數量上限', '最多設定5個地點', 'warning'); locCounts[type]++; const tpl = document.getElementById('tpl-location-card'); const clone = tpl.content.cloneNode(true); const card = clone.querySelector('.card'); card.dataset.type = type; card.dataset.id = `${type}-${Date.now()}`; card.querySelector('.badge-type').innerText = (type==='out'?'搬出':'搬入')+' '+locCounts[type]; card.querySelector('.badge-type').classList.add(type==='out'?'bg-brand-teal':'bg-brand-yellow'); const citySel = card.querySelector('.city-select'); Object.keys(TAIWAN_DATA).forEach(c => citySel.add(new Option(c,c))); citySel.onchange = e => { const dSel = card.querySelector('.dist-select'); dSel.innerHTML='<option>區域</option>'; (TAIWAN_DATA[e.target.value]||[]).forEach(d => dSel.add(new Option(d,d))); }; document.getElementById(`${type}-list`).appendChild(card); cardImages[card.dataset.id] = []; }
     function removeLocation(btn) { btn.closest('.card').remove(); }
     function setElevator(btn, has) { const c = btn.closest('.card'); c.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); c.dataset.hasElev = has; if(has) { c.querySelector('.floor-yes').classList.remove('hidden'); c.querySelector('.floor-no').classList.add('hidden'); } else { c.querySelector('.floor-yes').classList.add('hidden'); c.querySelector('.floor-no').classList.remove('hidden'); } }
     function toggleFloor(btn, val) { btn.classList.toggle('selected'); const p = btn.parentElement; const selected = Array.from(p.querySelectorAll('.selected')).map(b => b.innerText); p.parentElement.querySelector('.floor-btn-val').value = selected.join(','); }
     function setBtnLoading(btn, isLoading) { if (isLoading) { btn.classList.add('btn-loading'); btn.dataset.originalText = btn.innerHTML; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; } else { btn.classList.remove('btn-loading'); if(btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText; } }
-    function handleMultiPhoto(input, cat, max) { if(!input.files.length) return; const card = input.closest('.card'); const cid = card.dataset.id; const container = card.querySelector(`#container-${cat}`); if (container.querySelectorAll('.photo-thumbnail').length + input.files.length > max) return alert(`此區塊最多 ${max} 張`); if(!cardImages[cid]) cardImages[cid]=[]; Array.from(input.files).forEach(f => { cardImages[cid].push({ file: f, category: cat }); const reader = new FileReader(); reader.onload = e => { const div = document.createElement('div'); div.className = 'photo-thumbnail group relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-200'; div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="photo-delete absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer" onclick="removePhoto(this, '${cid}', '${f.name}')">×</div>`; container.insertBefore(div, input.parentElement); }; reader.readAsDataURL(f); }); input.value = ''; }
+    function handleMultiPhoto(input, cat, max) { if(!input.files.length) return; const card = input.closest('.card'); const cid = card.dataset.id; const container = card.querySelector(`#container-${cat}`); if (container.querySelectorAll('.photo-thumbnail').length + input.files.length > max) return showMsg('超過限制', `此區塊最多 ${max} 張`, 'warning'); if(!cardImages[cid]) cardImages[cid]=[]; Array.from(input.files).forEach(f => { cardImages[cid].push({ file: f, category: cat }); const reader = new FileReader(); reader.onload = e => { const div = document.createElement('div'); div.className = 'photo-thumbnail group relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-200'; div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="photo-delete absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer" onclick="removePhoto(this, '${cid}', '${f.name}')">×</div>`; container.insertBefore(div, input.parentElement); }; reader.readAsDataURL(f); }); input.value = ''; }
     function removePhoto(btn, cid, fileName) { btn.parentElement.remove(); if (cardImages[cid]) { const idx = cardImages[cid].findIndex(f => f.file.name === fileName); if (idx > -1) cardImages[cid].splice(idx, 1); } }
-    function runAiAnalysis(btn) { const card = btn.closest('.card'); const cid = card.dataset.id; const imgs = cardImages[cid]||[]; if(imgs.length===0) return alert('請先拍攝動線照片'); setBtnLoading(btn, true); const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); Promise.all(ps).then(pl => { google.script.run.withSuccessHandler(res => { setBtnLoading(btn, false); btn.innerHTML = '<i class="fas fa-magic"></i> 重新辨識'; if(res.error) return alert('AI失敗'); const box = card.querySelector('.ai-result-box'); box.classList.remove('hidden'); setTimeout(()=>box.classList.remove('opacity-0','translate-y-4'),10); box.scrollIntoView({behavior:'smooth'}); card.querySelector('.dist-input').value = res.long_push_units||0; card.querySelector('.stairs-input').value = res.stairs_count||0; card.querySelector('.transfer-input').value = res.transfer_count||0; card.querySelector('.risk-note').value = res.risk_note||''; if(res.recommend_crane) { card.querySelector('.crane-input').value=2; card.querySelector('.crane-alert').classList.remove('hidden'); card.querySelector('.crane-reason').innerText=res.crane_reason; } else { card.querySelector('.crane-input').value=0; card.querySelector('.crane-alert').classList.add('hidden'); } }).analyzeAccessImages(pl); }); }
+    function runAiAnalysis(btn) { const card = btn.closest('.card'); const cid = card.dataset.id; const imgs = cardImages[cid]||[]; if(imgs.length===0) return showMsg('提醒', '請先拍攝動線照片', 'warning'); setBtnLoading(btn, true); const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); Promise.all(ps).then(pl => { google.script.run.withSuccessHandler(res => { setBtnLoading(btn, false); btn.innerHTML = '<i class="fas fa-magic"></i> 重新辨識'; if(res.error) return showMsg('AI失敗', '', 'error'); const box = card.querySelector('.ai-result-box'); box.classList.remove('hidden'); setTimeout(()=>box.classList.remove('opacity-0','translate-y-4'),10); box.scrollIntoView({behavior:'smooth'}); card.querySelector('.dist-input').value = res.long_push_units||0; card.querySelector('.stairs-input').value = res.stairs_count||0; card.querySelector('.transfer-input').value = res.transfer_count||0; card.querySelector('.risk-note').value = res.risk_note||''; if(res.recommend_crane) { card.querySelector('.crane-input').value=2; card.querySelector('.crane-alert').classList.remove('hidden'); card.querySelector('.crane-reason').innerText=res.crane_reason; } else { card.querySelector('.crane-input').value=0; card.querySelector('.crane-alert').classList.add('hidden'); } }).analyzeAccessImages(pl); }); }
     function getStep1Data() { return Array.from(document.querySelectorAll('.location-card')).map(c => ({ id: c.dataset.id, type: c.dataset.type, city: c.querySelector('.city-select')?.value || '', area: c.querySelector('.dist-select')?.value || '', addr: c.querySelector('.addr-input')?.value || '', floor: c.dataset.hasElev!=='false' ? (c.querySelector('.floor-input-val')?.value || '') : (c.querySelector('.floor-btn-val')?.value || ''), hasElevator: c.dataset.hasElev!=='false', distance: c.querySelector('.dist-input')?.value || 0, pushUnits: c.querySelector('.dist-input')?.value || 0, craneHours: c.querySelector('.crane-input')?.value || 0, transferCount: c.querySelector('.transfer-input')?.value || 0, riskNote: c.querySelector('.risk-note')?.value || '' })); }
     function updateLocationOptions(step1Data) { if(!step1Data) return; locationOptions.out = step1Data.filter(l => l.type === 'out').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); locationOptions.in = step1Data.filter(l => l.type === 'in').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); document.querySelectorAll('.packing-card').forEach(card => { populateLocationSelects(card); updateFloorSelect(card.querySelector('.move-out-select'), 'out'); updateFloorSelect(card.querySelector('.move-in-select'), 'in'); updateCollapsedInfo(card.querySelector('.move-out-select')); }); }
     function populateLocationSelects(card) { const outSel = card.querySelector('.move-out-select') || card.querySelector('.area-move-out-select'); const inSel = card.querySelector('.move-in-select') || card.querySelector('.area-move-in-select'); if(!outSel || !inSel) return; const v1 = outSel.value; const v2 = inSel.value; outSel.innerHTML = '<option value="">選擇地點</option>'; inSel.innerHTML = '<option value="">選擇地點</option>'; locationOptions.out.forEach(o => outSel.add(new Option(o.name, o.id))); locationOptions.in.forEach(o => inSel.add(new Option(o.name, o.id))); outSel.value = v1; inSel.value = v2; }
@@ -1906,7 +1952,7 @@ function formatDomToText(container) {
     function copyCard(e, btn) { e.stopPropagation(); const originalCard = btn.closest('.dynamic-card'); const newCard = originalCard.cloneNode(true); const newId = `area-${Date.now()}`; newCard.dataset.id = newId; if(originalCard.classList.contains('packing-card')) { newCard.id = newId; newCard.querySelector('.area-name-input').value += " (複製)"; newCard.querySelector('.photo-scroll-container').id = `container-${newId}`; newCard.querySelector('.photo-scroll-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handlePackingPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-teal transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; newCard.querySelector('.item-list').innerHTML = ''; document.getElementById('packing-area-list').appendChild(newCard); } else { areaFilesStore.set(newId, []); newCard.querySelector('.area-photo-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handleAreaPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-primary transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; newCard.querySelector('.item-list').innerHTML = ''; const aiBtn = newCard.querySelector('.btn-ai-action'); aiBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> <span>開始辨識搬運物</span>'; setBtnLoading(aiBtn, false); originalCard.after(newCard); } const selects = originalCard.querySelectorAll('select'); const newSelects = newCard.querySelectorAll('select'); selects.forEach((sel, i) => newSelects[i].value = sel.value); updateCardTitle(newCard.querySelector('.area-name-input')); }
     function addPackingArea() { const tpl = document.getElementById('tpl-packing-area'); const clone = tpl.content.cloneNode(true); const card = clone.querySelector('.dynamic-card'); const id = `pack-area-${Date.now()}`; card.dataset.id = id; cardImages[id] = []; card.querySelector('.photo-scroll-container').id = `container-${id}`; card.querySelector('input[type="file"]').setAttribute('onchange', `handlePackingPhoto(this, '${id}')`); populateLocationSelects(card); document.getElementById('packing-area-list').appendChild(card); }
     function handlePackingPhoto(input, cid) { if(!input.files.length) return; const container = input.parentElement.parentElement; Array.from(input.files).forEach(file => { cardImages[cid].push({ file: file, category: 'packing' }); const reader = new FileReader(); reader.onload = e => { const div = document.createElement('div'); div.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="absolute top-1 right-1 bg-black/50 text-white w-5 h-5 rounded-full flex items-center justify-center cursor-pointer text-xs" onclick="removePhoto(this, '${cid}', '${file.name}')">×</div>`; container.insertBefore(div, input.parentElement); }; reader.readAsDataURL(file); }); input.value = ''; }
-    function runPackingAnalysis(btn) { const card = btn.closest('.dynamic-card'); const cid = card.dataset.id; const imgs = cardImages[cid]||[]; if (imgs.length === 0) return alert('請先拍攝櫃內或雜物照片'); setBtnLoading(btn, true); const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); Promise.all(ps).then(pl => { google.script.run.withSuccessHandler(res => { setBtnLoading(btn, false); if (res.error) { console.error("AI Error:", res); return alert('AI 分析失敗：' + res.error); } btn.innerHTML = '<i class="fas fa-check"></i> 分析完成'; const list = card.querySelector('.item-list'); list.innerHTML = ''; list.classList.remove('hidden'); let itemsToRender = []; if (res.items && Array.isArray(res.items)) itemsToRender = res.items; else if (Array.isArray(res)) itemsToRender = res; if (itemsToRender.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">AI 沒有辨識出具體物品，請試著靠近一點拍攝。</div>'; return; } const itemTpl = document.getElementById('tpl-packing-item'); itemsToRender.forEach(item => { const clone = itemTpl.content.cloneNode(true); clone.querySelector('.item-name').innerText = item.name || '未命名物品'; clone.querySelector('.item-qty').innerText = item.qty || 1; clone.querySelector('.val-qty').value = item.qty || 1; if (item.tags) clone.querySelector('.item-tags-detail').innerText = item.tags; else { const tagEl = clone.querySelector('.item-tags-detail'); if(tagEl && tagEl.parentElement) tagEl.parentElement.classList.add('hidden'); } if (item.sop) { const sopContainer = clone.querySelector('.item-sop'); let sopRaw = item.sop || ''; if (sopRaw.match(/\d+\./)) { const steps = sopRaw.split(/(?=\d+\.)/g); let tableHtml = '<table class="w-full text-xs border-collapse">'; let hasContent = false; steps.forEach(step => { step = step.trim(); if (!step) return; const parts = step.match(/^(\d+\.[^：:]+)[：:]([\s\S]*)/); if (parts && parts.length >= 3) { hasContent = true; const title = parts[1].trim(); const content = parts[2].trim(); tableHtml += ` <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50"> <td class="py-2 pr-2 font-bold text-brand-teal whitespace-nowrap align-top w-[80px]">${title}</td> <td class="py-2 text-gray-600 align-top leading-relaxed text-justify">${content}</td> </tr>`; } else { if(step.length > 2) { tableHtml += ` <tr class="border-b border-gray-100 last:border-0"> <td colspan="2" class="py-2 text-gray-600 align-top leading-relaxed">${step}</td> </tr>`; } } }); tableHtml += '</table>'; sopContainer.innerHTML = hasContent ? tableHtml : sopRaw.split('\n').join('<br>'); } else { sopContainer.innerHTML = sopRaw.split('\n').join('<br>'); } } if (item.materials) clone.querySelector('.item-materials').innerText = item.materials || ''; if (item.risk) { clone.querySelector('.item-risk-text').innerText = item.risk; clone.querySelector('.item-risk').classList.remove('hidden'); } if(item.summary) { clone.querySelector('.item-summary-text').innerText = item.summary; clone.querySelector('.item-summary').classList.remove('hidden'); } list.appendChild(clone); }); calcStep2Total(); updateCollapsedInfo(card); }).analyzePackingImages(pl); }); }
+    function runPackingAnalysis(btn) { const card = btn.closest('.dynamic-card'); const cid = card.dataset.id; const imgs = cardImages[cid]||[]; if (imgs.length === 0) return showMsg('提醒', '請先拍攝櫃內或雜物照片', 'warning'); setBtnLoading(btn, true); const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); Promise.all(ps).then(pl => { google.script.run.withSuccessHandler(res => { setBtnLoading(btn, false); if (res.error) { console.error("AI Error:", res); return showMsg('AI 分析失敗', res.error, 'error'); } btn.innerHTML = '<i class="fas fa-check"></i> 分析完成'; const list = card.querySelector('.item-list'); list.innerHTML = ''; list.classList.remove('hidden'); let itemsToRender = []; if (res.items && Array.isArray(res.items)) itemsToRender = res.items; else if (Array.isArray(res)) itemsToRender = res; if (itemsToRender.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">AI 沒有辨識出具體物品，請試著靠近一點拍攝。</div>'; return; } const itemTpl = document.getElementById('tpl-packing-item'); itemsToRender.forEach(item => { const clone = itemTpl.content.cloneNode(true); clone.querySelector('.item-name').innerText = item.name || '未命名物品'; clone.querySelector('.item-qty').innerText = item.qty || 1; clone.querySelector('.val-qty').value = item.qty || 1; if (item.tags) clone.querySelector('.item-tags-detail').innerText = item.tags; else { const tagEl = clone.querySelector('.item-tags-detail'); if(tagEl && tagEl.parentElement) tagEl.parentElement.classList.add('hidden'); } if (item.sop) { const sopContainer = clone.querySelector('.item-sop'); let sopRaw = item.sop || ''; if (sopRaw.match(/\d+\./)) { const steps = sopRaw.split(/(?=\d+\.)/g); let tableHtml = '<table class="w-full text-xs border-collapse">'; let hasContent = false; steps.forEach(step => { step = step.trim(); if (!step) return; const parts = step.match(/^(\d+\.[^：:]+)[：:]([\s\S]*)/); if (parts && parts.length >= 3) { hasContent = true; const title = parts[1].trim(); const content = parts[2].trim(); tableHtml += ` <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50"> <td class="py-2 pr-2 font-bold text-brand-teal whitespace-nowrap align-top w-[80px]">${title}</td> <td class="py-2 text-gray-600 align-top leading-relaxed text-justify">${content}</td> </tr>`; } else { if(step.length > 2) { tableHtml += ` <tr class="border-b border-gray-100 last:border-0"> <td colspan="2" class="py-2 text-gray-600 align-top leading-relaxed">${step}</td> </tr>`; } } }); tableHtml += '</table>'; sopContainer.innerHTML = hasContent ? tableHtml : sopRaw.split('\n').join('<br>'); } else { sopContainer.innerHTML = sopRaw.split('\n').join('<br>'); } } if (item.materials) clone.querySelector('.item-materials').innerText = item.materials || ''; if (item.risk) { clone.querySelector('.item-risk-text').innerText = item.risk; clone.querySelector('.item-risk').classList.remove('hidden'); } if(item.summary) { clone.querySelector('.item-summary-text').innerText = item.summary; clone.querySelector('.item-summary').classList.remove('hidden'); } list.appendChild(clone); }); calcStep2Total(); updateCollapsedInfo(card); }).analyzePackingImages(pl); }); }
     function toggleItem(header) { const card = header.closest('.item-card'); const body = card.querySelector('.item-body'); const icon = header.querySelector('.toggle-icon-item'); if (body.classList.contains('active')) { body.classList.remove('active'); body.style.display = 'none'; icon.classList.remove('rotate-90'); } else { body.style.display = 'block'; setTimeout(() => { body.classList.add('active'); }, 10); icon.classList.add('rotate-90'); } }
     function removeItem(e, btn) { const card = btn.closest('.dynamic-card'); e.stopPropagation(); btn.closest('.item-card').remove(); calcStep2Total(); updateCollapsedInfo(card); }
     function calcStep2Total() { let totalBoxes = 0; document.querySelectorAll('.val-qty').forEach(el => { totalBoxes += parseInt(el.value || 0); }); const boxCount = parseInt(document.getElementById('material-box').value) || 0; const bubbleCount = parseInt(document.getElementById('material-bubble').value) || 0; let fee = 0; if (document.getElementById('service-pack').checked) fee += totalBoxes * 500; if (document.getElementById('service-unpack').checked) fee += totalBoxes * 600; fee += boxCount * 50; fee += bubbleCount * 500; document.getElementById('step2-total').innerText = `$ ${fee.toLocaleString()}`; userData.packing = { totalBoxes, fee }; }
@@ -1918,11 +1964,31 @@ function formatDomToText(container) {
     function updateAreaSummaryText(el) { const card = el.closest('.area-card'); const outSel = card.querySelector('.area-move-out-select'); const inSel = card.querySelector('.area-move-in-select'); const outFloor = card.querySelector('.area-out-floor-select'); const inFloor = card.querySelector('.area-in-floor-select'); const getTxt = (sel) => sel.options[sel.selectedIndex]?.text || '?'; const cleanTxt = (t) => t === '選擇地點' || t === '選擇樓層' ? '?' : t.split('.')[1] || t; const getFl = (sel) => sel.value ? `(${sel.value})` : ''; const outT = cleanTxt(getTxt(outSel)) + getFl(outFloor); const inT = cleanTxt(getTxt(inSel)) + getFl(inFloor); const infoEl = card.querySelector('.info-text'); if(outSel.value || inSel.value) { infoEl.innerHTML = `${outT} <i class="fas fa-long-arrow-alt-right mx-2 text-gray-300"></i> ${inT}`; } else { infoEl.innerText = '尚未設定路線'; } }
     function handleAreaPhoto(input) { if (!input.files.length) return; const card = input.closest('.area-card'); const areaId = card.dataset.id; const container = card.querySelector('.area-photo-container'); const currentFiles = areaFilesStore.get(areaId) || []; Array.from(input.files).forEach(file => { if (currentFiles.some(f => f.file.name === file.name && f.file.size === file.size)) return; const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`; currentFiles.push({ id: fileId, file: file, processed: false }); const thumb = document.createElement('div'); thumb.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; thumb.dataset.fileId = fileId; const reader = new FileReader(); reader.onload = e => { thumb.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="btn-delete-img" onclick="deleteAreaPhoto('${areaId}', '${fileId}', this)">×</div>`; container.insertBefore(thumb, container.lastElementChild); }; reader.readAsDataURL(file); }); areaFilesStore.set(areaId, currentFiles); input.value = ''; }
     function deleteAreaPhoto(areaId, fileId, btn) { let files = areaFilesStore.get(areaId); files = files.filter(f => f.id !== fileId); areaFilesStore.set(areaId, files); btn.closest('.photo-thumbnail').remove(); }
-    async function runAreaRecognition(btn) { const card = btn.closest('.area-card'); const areaId = card.dataset.id; const files = (areaFilesStore.get(areaId) || []).filter(f => !f.processed); if (!files.length) return alert('沒有新的照片需要辨識'); setBtnLoading(btn, true); const areaName = card.querySelector('.area-name-input').value; const floorText = card.querySelector('.area-out-floor-select').value; const listContainer = card.querySelector('.item-list'); listContainer.classList.remove('hidden'); for (const f of files) { try { const base64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(f.file); }); const resultText = await new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).callGeminiApi(base64, f.file.type, areaName, floorText); }); parseAndRenderAiResult(resultText, listContainer); f.processed = true; const thumb = card.querySelector(`.photo-thumbnail[data-file-id="${f.id}"]`); if(thumb) thumb.style.opacity = '0.5'; } catch (err) { console.error('AI Error:', err); } } setBtnLoading(btn, false); btn.innerHTML = '<i class="fas fa-check"></i> 辨識完成'; }
+    async function runAreaRecognition(btn) { const card = btn.closest('.area-card'); const areaId = card.dataset.id; const files = (areaFilesStore.get(areaId) || []).filter(f => !f.processed); if (!files.length) return showMsg('提醒', '沒有新的照片需要辨識', 'warning'); setBtnLoading(btn, true); const areaName = card.querySelector('.area-name-input').value; const floorText = card.querySelector('.area-out-floor-select').value; const listContainer = card.querySelector('.item-list'); listContainer.classList.remove('hidden'); for (const f of files) { try { const base64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(f.file); }); const resultText = await new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).callGeminiApi(base64, f.file.type, areaName, floorText); }); parseAndRenderAiResult(resultText, listContainer); f.processed = true; const thumb = card.querySelector(`.photo-thumbnail[data-file-id="${f.id}"]`); if(thumb) thumb.style.opacity = '0.5'; } catch (err) { console.error('AI Error:', err); } } setBtnLoading(btn, false); btn.innerHTML = '<i class="fas fa-check"></i> 辨識完成'; }
     function parseAndRenderAiResult(text, container) { if (!text || text.startsWith('錯誤')) return; const lines = text.trim().split('\n').filter(l => l.trim() !== ''); const tpl = document.getElementById('tpl-ai-item-row'); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); if (line.startsWith('區域：') || line.startsWith('【')) continue; const nextLine = lines[i+1] ? lines[i+1].trim() : ''; if (nextLine.startsWith('【')) { const match = line.match(/(.+) \* (\d+)/); const name = match ? match[1].trim() : line; const qty = match ? match[2].trim() : '1'; const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; let type='', mat='', diff='', dis=''; const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; attrs.forEach(a => { if(KNOWN_DIFFS.includes(a)) diff = a; else if(KNOWN_DIS.includes(a)) dis = a; else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; else mat += a + ' '; }); if(!type && attrs.length>0) type = attrs[0]; let riskText = '', skipLines = 1; if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); skipLines = 2; } const clone = tpl.content.cloneNode(true); const row = clone.querySelector('.item-card'); row.querySelector('.inp-name').value = name; row.querySelector('.inp-qty').value = qty; row.querySelector('.inp-type').value = type; row.querySelector('.inp-material').value = mat; row.querySelector('.inp-difficulty').value = diff || '一人可搬'; row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; row.querySelector('.inp-risknote').value = riskText; updateAiItemDisplay(row.querySelector('.inp-name')); container.appendChild(row); i += skipLines; } } }
     function updateAiItemDisplay(input) { const card = input.closest('.item-card'); const name = card.querySelector('.inp-name').value; const qty = card.querySelector('.inp-qty').value; const type = card.querySelector('.inp-type').value; const mat = card.querySelector('.inp-material').value; const diff = card.querySelector('.inp-difficulty').value; const dis = card.querySelector('.inp-disassembly').value; const risk = card.querySelector('.inp-risknote').value; card.querySelector('.item-name').innerText = name; card.querySelector('.item-qty').innerText = `${qty}`; const tagContainer = card.querySelector('.item-tags-row'); let html = ''; if(type) html += `<span class="tag-std">${type}</span>`; if(mat) html += `<span class="tag-std">${mat}</span>`; let diffClass = 'tag-std'; if (diff.includes('技術') || diff.includes('特殊')) diffClass = 'tag-highlight'; html += `<span class="${diffClass}">${diff}</span>`; if(dis) html += `<span class="tag-std">${dis}</span>`; tagContainer.innerHTML = html; const riskBar = card.querySelector('.item-risk-bar'); if(risk && risk !== '無' && risk.trim() !== '') { riskBar.innerText = risk; riskBar.classList.remove('hidden'); riskBar.classList.remove('risk-bg-red', 'risk-bg-orange', 'risk-bg-green'); if (diff.includes('特殊') || diff.includes('技術')) riskBar.classList.add('risk-bg-red'); else if (diff.includes('二人')) riskBar.classList.add('risk-bg-orange'); else riskBar.classList.add('risk-bg-green'); } else { riskBar.classList.add('hidden'); } }
     function toggleAiItem(header) { const body = header.nextElementSibling; const icon = header.querySelector('.item-arrow-icon'); if(body.classList.contains('active')) { body.classList.remove('active'); icon.style.transform = 'rotate(0deg)'; } else { body.classList.add('active'); icon.style.transform = 'rotate(90deg)'; } }
-    function deleteAiItem(e, btn) { e.stopPropagation(); if(confirm('確定刪除此物品？')) btn.closest('.item-card').remove(); }
+    function deleteAiItem(e, btn) { 
+        e.stopPropagation(); 
+        // [MOD] 使用 SweetAlert2 取代 confirm
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '確定刪除？',
+                text: '刪除後無法復原',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: '是的，刪除'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    btn.closest('.item-card').remove();
+                }
+            });
+        } else if(confirm('確定刪除此物品？')) {
+            btn.closest('.item-card').remove(); 
+        }
+    }
     function copyAiItem(e, btn) { e.stopPropagation(); const card = btn.closest('.item-card'); const clone = card.cloneNode(true); clone.querySelectorAll('input, select, textarea').forEach(input => { const originalInput = card.querySelector(`.${Array.from(input.classList).find(c => c.startsWith('inp-'))}`); if(originalInput) input.value = originalInput.value; }); updateAiItemDisplay(clone.querySelector('.inp-name')); card.parentElement.insertBefore(clone, card.nextSibling); }
 
 
@@ -1934,7 +2000,11 @@ function formatDomToText(container) {
 
 async function handleBooking() {
     const btn = document.getElementById('btn-book-now');
-    if (!confirm('確定要送出預約嗎？\n系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)')) return;
+    
+    // [MOD] 使用 showConfirm 取代原生的 confirm
+    const isConfirmed = await showConfirm('確定要送出預約嗎？', '系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)');
+    
+    if (!isConfirmed) return;
 
     // 1. UI 變更為 Loading
     const originalText = btn.innerHTML;
@@ -2006,7 +2076,7 @@ async function handleBooking() {
                     btn.classList.remove('bg-brand-dark');
                     btn.classList.add('bg-green-600');
                     
-                    alert('🎉 預約資料已成功送出！\n確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。');
+                    showMsg('🎉 預約資料已成功送出！', '確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。', 'success');
                     
                     // 隱藏操作按鈕，顯示 LINE 按鈕
                     document.getElementById('action-buttons').style.display = 'none';
@@ -2025,7 +2095,7 @@ async function handleBooking() {
 
     } catch (err) {
         console.error(err);
-        alert('上傳失敗，請重試或聯繫客服：' + err.message);
+        showMsg('上傳失敗', '請重試或聯繫客服：' + err.message, 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
     }
@@ -2093,4 +2163,5 @@ function fileToBase64(file) {
 }
 
 </script>
+
 </html>
