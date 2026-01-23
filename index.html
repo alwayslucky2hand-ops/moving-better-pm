@@ -741,6 +741,33 @@
     // ==========================================
     // 2. 步驟導航
     // ==========================================
+
+
+  // 專門用來背景傳送進度給 GAS 的函式 (Fire and Forget，不等回傳)
+function trackProgress() {
+    // 收集目前已知的資料
+    const payload = {
+        currentStep: currentStep + 1, // 紀錄即將進入的下一步
+        email: document.getElementById('input-email')?.value || userData.basic?.email,
+        name: document.getElementById('input-name')?.value || userData.basic?.name,
+        date: document.getElementById('input-date')?.value || userData.basic?.date,
+        type: document.getElementById('input-type')?.value || userData.basic?.type,
+        referrer: document.getElementById('input-referrer')?.value || userData.basic?.referrer,
+        // 如果有備註也順便存
+        notes: document.getElementById('final-special-notes')?.value || ""
+    };
+
+    // 只有當 Email 存在時才記錄，避免無效資料
+    if (payload.email) {
+        // 使用不等待回應的方式呼叫，避免卡住使用者介面
+        callBackendAPI('logUserProgress', payload).then(res => {
+            console.log("進度已儲存:", res);
+        }).catch(err => {
+            console.warn("進度儲存失敗 (不影響流程):", err);
+        });
+    }
+}
+  
     async function nextStep() { 
         if (currentStep === 0) { 
             const name = document.getElementById('input-name').value; 
@@ -1196,6 +1223,14 @@ function clearSignature() {
   const placeholder = document.querySelector('.signature-placeholder');
   if (placeholder) placeholder.style.display = 'block';
 }
+
+  // 監聽視窗改變大小，重新調整畫布 (選用，但建議加上)
+  window.addEventListener('resize', () => {
+     const parent = canvas.parentElement;
+     canvas.width = parent.clientWidth;
+     canvas.height = parent.clientHeight;
+     // 注意：重設寬高會清空畫布，需權衡 UX
+  });
   
 
     // ==========================================
