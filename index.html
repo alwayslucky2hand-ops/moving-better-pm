@@ -449,7 +449,7 @@
       
     <div id="steps-container">
     <div id="step-0" class="step-section active">
-          <form id="step0-form" class="space-y-5 mt-4">
+          <div id="step0-form" class="space-y-5 mt-4">
             <div><label class="block text-sm font-bold text-gray-700 mb-2">1. 請問怎麼稱呼您？</label><input type="text" id="input-name" class="input-field" placeholder="例如：陳先生"></div>
             <div><label class="block text-sm font-bold text-gray-700 mb-2">2. Email </label><input type="email" id="input-email" class="input-field" placeholder="name@example.com"></div>
             
@@ -475,7 +475,7 @@
               <input type="date" id="input-date" class="input-field" onchange="checkDate()">
               <div id="date-alert" class="hidden mt-3 p-3 rounded-xl text-sm border bg-gray-50 text-gray-600"></div>
             </div>
-          </form>
+          </div>
         </div>
 
         <div id="step-1" class="step-section">
@@ -1943,7 +1943,7 @@
         btn.innerHTML = '<i class="fas fa-check"></i> 辨識完成'; 
     }
 
-    function parseAndRenderAiResult(text, container) { if (!text || text.startsWith('錯誤')) return; const lines = text.trim().split('\n').filter(l => l.trim() !== ''); const tpl = document.getElementById('tpl-ai-item-row'); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); if (line.startsWith('區域：') || line.startsWith('【')) continue; const nextLine = lines[i+1] ? lines[i+1].trim() : ''; if (nextLine.startsWith('【')) { const match = line.match(/(.+) \* (\d+)/); const name = match ? match[1].trim() : line; const qty = match ? match[2].trim() : '1'; const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; let type='', mat='', diff='', dis=''; const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; attrs.forEach(a => { if(KNOWN_DIFFS.includes(a)) diff = a; else if(KNOWN_DIS.includes(a)) dis = a; else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; else mat += a + ' '; }); if(!type && attrs.length>0) type = attrs[0]; let riskText = '', skipLines = 1; if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); skipLines = 2; } const clone = tpl.content.cloneNode(true); const row = clone.querySelector('.item-card'); row.querySelector('.inp-name').value = name; row.querySelector('.inp-qty').value = qty; row.querySelector('.inp-type').value = type; row.querySelector('.inp-material').value = mat; row.querySelector('.inp-difficulty').value = diff || '一人可搬'; row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; row.querySelector('.inp-risknote').value = riskText; updateAiItemDisplay(row.querySelector('.inp-name')); container.appendChild(row); i += skipLines; } } }
+    function parseAndRenderAiResult(text, container) { if (!text || text.startsWith('錯誤')) return; const lines = text.trim().split('\n').filter(l => l.trim() !== ''); const tpl = document.getElementById('tpl-ai-item-row'); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); if (line.startsWith('區域：') || line.startsWith('【')) continue; const nextLine = lines[i+1] ? lines[i+1].trim() : ''; if (nextLine.startsWith('【')) { const match = line.match(/(.+) * (\d+)/); const name = match ? match[1].trim() : line; const qty = match ? match[2].trim() : '1'; const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; let type='', mat='', diff='', dis=''; const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; attrs.forEach(a => { if(KNOWN_DIFFS.includes(a)) diff = a; else if(KNOWN_DIS.includes(a)) dis = a; else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; else mat += a + ' '; }); if(!type && attrs.length>0) type = attrs[0]; let riskText = '', skipLines = 1; if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); skipLines = 2; } const clone = tpl.content.cloneNode(true); const row = clone.querySelector('.item-card'); row.querySelector('.inp-name').value = name; row.querySelector('.inp-qty').value = qty; row.querySelector('.inp-type').value = type; row.querySelector('.inp-material').value = mat; row.querySelector('.inp-difficulty').value = diff || '一人可搬'; row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; row.querySelector('.inp-risknote').value = riskText; updateAiItemDisplay(row.querySelector('.inp-name')); container.appendChild(row); i += skipLines; } } }
     function updateAiItemDisplay(input) { const card = input.closest('.item-card'); const name = card.querySelector('.inp-name').value; const qty = card.querySelector('.inp-qty').value; const type = card.querySelector('.inp-type').value; const mat = card.querySelector('.inp-material').value; const diff = card.querySelector('.inp-difficulty').value; const dis = card.querySelector('.inp-disassembly').value; const risk = card.querySelector('.inp-risknote').value; card.querySelector('.item-name').innerText = name; card.querySelector('.item-qty').innerText = `${qty}`; const tagContainer = card.querySelector('.item-tags-row'); let html = ''; if(type) html += `<span class="tag-std">${type}</span>`; if(mat) html += `<span class="tag-std">${mat}</span>`; let diffClass = 'tag-std'; if (diff.includes('技術') || diff.includes('特殊')) diffClass = 'tag-highlight'; html += `<span class="${diffClass}">${diff}</span>`; if(dis) html += `<span class="tag-std">${dis}</span>`; tagContainer.innerHTML = html; const riskBar = card.querySelector('.item-risk-bar'); if(risk && risk !== '無' && risk.trim() !== '') { riskBar.innerText = risk; riskBar.classList.remove('hidden'); riskBar.classList.remove('risk-bg-red', 'risk-bg-orange', 'risk-bg-green'); if (diff.includes('特殊') || diff.includes('技術')) riskBar.classList.add('risk-bg-red'); else if (diff.includes('二人')) riskBar.classList.add('risk-bg-orange'); else riskBar.classList.add('risk-bg-green'); } else { riskBar.classList.add('hidden'); } }
     function toggleAiItem(header) { const body = header.nextElementSibling; const icon = header.querySelector('.item-arrow-icon'); if(body.classList.contains('active')) { body.classList.remove('active'); icon.style.transform = 'rotate(0deg)'; } else { body.classList.add('active'); icon.style.transform = 'rotate(90deg)'; } }
     function deleteAiItem(e, btn) { e.stopPropagation(); if(confirm('確定刪除此物品？')) btn.closest('.item-card').remove(); }
@@ -2099,9 +2099,3 @@
 
 </script>
 </html>
-
-
-
-
-
-  
