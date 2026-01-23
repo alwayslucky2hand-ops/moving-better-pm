@@ -107,9 +107,40 @@
     /* 結果與明細 */
     .result-total-card { text-align: center; border: 2px solid #FDB813; background: #FFFDF5; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
     .result-amount { font-size: 48px; font-weight: 800; color: #2A2A2A; margin: 10px 0; }
-    .result-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-top: 15px; border-top: 1px solid #E5E7EB; }
-    .result-summary-item label { font-size: 12px; color: #9CA3AF; display: block; margin-bottom: 2px; }
-    .result-summary-item span { font-size: 16px; font-weight: 700; color: #2A2A2A; }
+/* --- 修改開始：強制垂直排列 --- */
+
+    /* 1. 預估結果的三個方塊 (車次/人力/工時) 改為垂直堆疊 */
+    .result-summary-grid {
+        display: grid;
+        grid-template-columns: 1fr; /* 原本是 repeat(3, 1fr)，改成 1fr 變成單欄 */
+        gap: 15px; /* 增加間距讓它不要太擠 */
+        padding-top: 15px;
+        border-top: 1px solid #E5E7EB;
+        text-align: left; /* 文字改為靠左，閱讀比較順 */
+    }
+
+    /* 調整內部的呈現方式，讓標題和數值在一行，或者你也想要這兩個都換行？
+       這裡設定為：標題在左，數值在右 (類似清單) */
+    .result-summary-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        background-color: #F9FAFB;
+        border-radius: 8px;
+    }
+    
+    .result-summary-item label {
+        font-size: 14px;
+        color: #6B7280;
+        margin-bottom: 0; /* 移除原本的 margin */
+    }
+
+    .result-summary-item span {
+        font-size: 16px;
+        font-weight: 800;
+        color: #2A2A2A;
+    }
     .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #F3F4F6; font-size: 15px; }
     .breakdown-row:last-child { border-bottom: none; }
     .breakdown-label { font-weight: 700; color: #374151; }
