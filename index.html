@@ -1735,5 +1735,36 @@
         });
     }
 
+  // ============================================================
+// 🚑 急救包：請將這段貼在 HTML 檔案 <script> 區域的最下面
+// 這會強制關閉所有自動存檔功能，不管前面怎麼寫，這裡說了算！
+// ============================================================
+
+// 1. 強制覆蓋：把自動存檔功能變成「啞巴」，只印字不連網
+window.autoSaveProgress = function(step) {
+    console.log("🛑 [急救包生效] 已攔截自動存檔，Step:", step);
+    return; // 什麼都不做，絕對不連網
+};
+
+// 2. 強制覆蓋：把 proceedToStep1 裡面的存檔呼叫也擋掉
+window.proceedToStep1 = function(name, email, date, type, referrer) {
+    let urgency = "normal"; 
+    if (date) { 
+        const today = new Date(); today.setHours(0,0,0,0);
+        const d = Math.ceil((new Date(date)-today)/(864e5));
+        if(d<3) urgency="critical"; else if(d<7) urgency="urgent"; 
+    } 
+    
+    // 確保 userData 存在
+    if (typeof userData === 'undefined') window.userData = {};
+    userData.basic = { name, email, date, type, referrer, urgency }; 
+    localStorage.setItem('ayue_user_info', JSON.stringify(userData.basic)); 
+    
+    // 這裡我們不呼叫 autoSaveProgress，直接跳轉
+    goToStep(1); 
+};
+
+console.log("✅ 急救包已載入：所有網路連線功能已強制關閉，您可以放心操作了！");
+
 </script>
 </html>
