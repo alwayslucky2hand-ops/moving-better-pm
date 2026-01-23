@@ -1074,9 +1074,8 @@
             quoteResult: userData.quoteResult || { totalFee: 0 } 
         };
 
-        try {
-            // 🟢【關鍵修正】：這裡加上 { fullData: ... } 的包裝
-            // 這樣後端才能透過 request.fullData 讀取到資料
+try {
+            // ... (原本的 callBackendAPI 呼叫) ...
             const res = await callBackendAPI('generateMovingGuide', { fullData: fullData });
             
             loadingEl.classList.add('hidden');
@@ -1084,15 +1083,40 @@
             if (res.error) {
                 contentEl.innerHTML = `<div class="text-center text-red-500 py-10">指南生成失敗：${res.error}</div>`;
             } else {
-                // 清理可能殘留的 markdown 符號
+                // 清理 markdown
                 let cleanHtml = res.html.replace(/```html/g, '').replace(/```/g, '').trim();
                 contentEl.innerHTML = cleanHtml;
                 
-                // 成功後，初始化簽名板
                 setTimeout(initSignaturePad, 500);
 
-                // 這裡註解掉自動存檔，避免又報錯
-                // autoSaveProgress(6, { guideHtml: cleanHtml });
+                // 🟢【關鍵新增】：手動呼叫後端存檔
+                // 我們直接呼叫 callBackendAPI 去存檔，而不是用 autoSaveProgress
+                // 因為 autoSaveProgress 已經被我們閹割了
+                
+                // 1. 準備要存的文字資料 (這裡我們簡單處理，直接存 HTML)
+                const payload = {
+                    email: userData.basic.email,
+                    name: userData.basic.name,
+                    type: userData.basic.type,
+                    moveDate: userData.basic.date,
+                    referrer: userData.basic.referrer,
+                    currentStep: "Step 6 (指南完成)",
+                    // 把其他欄位補齊，避免覆蓋成空白
+                    step1: formatStep1ToText(),
+                    step2: formatStep2ToText(),
+                    step3: formatStep3ToText(),
+                    notes: document.getElementById('final-special-notes')?.value || "",
+                    totalPrice: formatStep5ToText(),
+                    guideContent: formatDomToText(contentEl), // 轉成純文字存檔
+                    isSent: "否"
+                };
+
+                // 2. 發送存檔請求 (不等待結果，讓它在背景跑)
+                callBackendAPI('logUserProgress', payload).then(() => {
+                    console.log("指南已自動存檔至試算表");
+                }).catch(err => {
+                    console.error("指南存檔失敗:", err);
+                });
             }
         } catch (err) {
             console.error(err);
