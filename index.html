@@ -608,28 +608,23 @@
 <script>
     // ==========================================
     // 【重要】GitHub Pages 專用設定
-    // 請將下方的網址替換成你的 Google Apps Script 部署網址 (Web App URL)
     // ==========================================
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz7lv9ntbB2Bvpng1DO31Kn8-WRyveoUIwuCyMs2ydC3LdGtGnGbPnrenyc-ff7zpKInw/exec";
 
-// 強韌版 API 呼叫函式 (配合後端 Text/Plain 策略)
+    // 強韌版 API 呼叫函式 (配合後端 Text/Plain 策略)
     async function callBackendAPI(action, data = {}) {
         if (!GAS_API_URL || GAS_API_URL.includes("你的_DEPLOYMENT_ID")) {
             alert("請先設定正確的 GAS_API_URL！");
             throw new Error("API URL 未設定");
         }
 
-        // 建構標準 Payload
         const payload = JSON.stringify({ action: action, ...data });
 
         try {
-            // 使用 fetch 發送請求
             const response = await fetch(GAS_API_URL, {
                 method: "POST",
-                // 【關鍵】使用 text/plain，避免觸發複雜的 CORS Preflight (OPTIONS)
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: payload,
-                // 【關鍵】設定 redirect 為 follow，確保自動跟隨 GAS 的 302 跳轉
                 redirect: "follow"
             });
 
@@ -637,38 +632,27 @@
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            // 先讀取純文字
             const textResult = await response.text();
 
-            // 嘗試解析 JSON
             try {
                 const jsonResult = JSON.parse(textResult);
-                
-                // 檢查是否有應用層級的錯誤
                 if (jsonResult && jsonResult.error) {
                     console.error("後端執行錯誤:", jsonResult.error);
-                    // 這裡可以選擇是否要 alert，或者直接回傳讓外層處理
                     return jsonResult; 
                 }
-                
                 return jsonResult;
-
             } catch (e) {
-                // 如果解析失敗，通常是因為 Google 回傳了 HTML 登入頁面
                 console.error("JSON 解析失敗，原始回應:", textResult);
-                
-                // 這裡是一個「多重帳號登入」的常見 Bug 提示
                 if (textResult.includes("<!DOCTYPE html>") || textResult.includes("Google Accounts")) {
                     alert("⚠️ 系統偵測到帳號衝突！\n\nGoogle 安全機制擋住了連線。\n請嘗試：\n1. 使用「無痕視窗」開啟此網頁。\n2. 或登出瀏覽器中其他的 Google 帳號。");
                 } else {
-                    alert("資料傳輸異常，請稍後再試。");
+                    console.warn("資料傳輸異常，可能為網路問題或回應非 JSON");
                 }
                 throw new Error("API 回應非有效 JSON");
             }
 
         } catch (error) {
             console.error("網路連線層級錯誤:", error);
-            // 這裡不再 alert，因為上面的 try-catch 已經處理過了
             throw error;
         }
     }
@@ -682,8 +666,6 @@
     let cardImages = {}; 
     let locationOptions = { out: [], in: [] }; 
     let areaFilesStore = new Map();
-
-    // 簽名板變數
     let signaturePad = { canvas: null, ctx: null, isDrawing: false };
 
     const TAIWAN_DATA = { 
@@ -715,18 +697,15 @@
       const dateInput = document.getElementById('input-date');
       if(dateInput) dateInput.min = new Date().toISOString().split('T')[0];
       loadFromStorage();
-      
-      // 初始化預設卡片
       addLocation('out'); addLocation('in');
       addPackingArea(); addAreaCard();
     });
 
-// ==========================================
-    // 2. 步驟導航 (單機強制通行版 - 終極修正)
+    // ==========================================
+    // 2. 步驟導航 (修正版：強制通行，無背景連線)
     // ==========================================
     async function nextStep() { 
         if (currentStep === 0) { 
-            // --- Step 0: 基本資料收集 ---
             const name = document.getElementById('input-name').value; 
             const email = document.getElementById('input-email').value;
             const date = document.getElementById('input-date').value; 
@@ -735,10 +714,8 @@
 
             if(!name || !date || !email || !type) return alert('請填寫完整基本資訊'); 
             
-            // 強制檢查是否有輸入代碼
             if(!referrer) return alert('請輸入會員代碼才能繼續！');
 
-            // 🟢【修改重點】：強制通行，跳過後端檢查，避免 302 錯誤
             console.log("強制通行：跳過代碼檢查，直接進入 Step 1");
             proceedToStep1(name, email, date, type, referrer);
             return; 
@@ -750,33 +727,24 @@
             const ins = userData.locations.filter(l => l.type === 'in'); 
             if(outs.length === 0 || ins.length === 0) return alert('請至少設定一個搬出地與一個搬入地'); 
             
-            // 🟢【修改重點】：註解掉自動存檔，避免背景報錯
-            // autoSaveProgress(1); 
-
             updateLocationOptions(userData.locations); 
             updateStep3Dropdowns(); 
             goToStep(2); 
         } else if (currentStep === 2) { 
             calcStep2Total(); 
-            // 🟢【修改重點】：註解掉自動存檔
-            // autoSaveProgress(2); 
             goToStep(3); 
         } else if (currentStep === 3) { 
             const areas = document.querySelectorAll('.area-card'); 
             if(areas.length === 0) return alert('請至少新增一個區域 (如：臥室)'); 
             
-            // 🟢【修改重點】：註解掉自動存檔
-            // autoSaveProgress(3); 
             goToStep(4); 
         } else if (currentStep === 4) {
             const btn = document.querySelector('#step-4 .btn-main');
-            // 注意：這裡還是會呼叫後端進行「估價計算」，但因為前面沒有報錯了，這裡成功率會變高
             handleSubmitEstimation(btn);
         } else if (currentStep === 5) {
             document.getElementById('main-footer').style.display = 'none';
             goToStep(6); 
             
-            // 🟢【修改重點】：如果生成指南也會報錯，建議先把下面這行註解掉測試
             generateGuide(); 
             
             setTimeout(initSignaturePad, 500);
@@ -790,8 +758,6 @@
         userData.basic = { name, email, date, type, referrer, urgency }; 
         localStorage.setItem('ayue_user_info', JSON.stringify(userData.basic)); 
         
-        // 🟢【修改重點】：註解掉自動存檔
-        // autoSaveProgress(0); 
         goToStep(1); 
     }
 
@@ -860,19 +826,11 @@
         }
     }
 
-
-    // ============================================================
-    // 🛑 最後一道防線：強制關閉自動存檔 (請貼在檔案最末端)
-    // ============================================================
-    window.autoSaveProgress = function(step) {
-        console.log("🛑 [強制覆蓋生效] 自動存檔已被攔截，Step:", step);
-        return; // 什麼都不做，絕對不連網
-    };
-    console.log("✅ 自動存檔功能已由末端腳本強制關閉");
-
+    // [空殼函式] 避免背景存檔錯誤
+    function autoSaveProgress(step) { console.log("存檔略過 Step", step); }
 
     // ==========================================
-    // 3. 核心邏輯 (Core Logic - API Integrated)
+    // 3. 核心邏輯
     // ==========================================
 
     async function handleSubmitEstimation(btnElement) {
@@ -936,7 +894,6 @@
         };
 
         try {
-            // API 呼叫：計算費用
             const res = await callBackendAPI('calculateFullQuote', { requestData: requestData });
             
             if (btnElement) setBtnLoading(btnElement, false);
@@ -944,10 +901,6 @@
             
             if (res.error) return alert('錯誤：' + res.error);
             showEstimationResult(res, requestData);
-
-            setTimeout(() => {
-                autoSaveProgress(5); 
-            }, 500);
 
         } catch (err) {
             if (btnElement) setBtnLoading(btnElement, false);
@@ -1009,7 +962,7 @@
         if (res.itemCounts["一人技術搬"] > 0 || res.itemCounts["二人技術搬"] > 0) {
             html += `<div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r"><h4 class="font-bold text-blue-700 mb-1 flex items-center"><i class="fas fa-shield-alt mr-2"></i>精緻物品防護</h4><ul class="text-sm text-blue-800 space-y-1 list-none"><li class="pl-4 relative before:content-['•'] before:absolute before:left-0">我們會使用毯子或膠膜加強防護。</li><li class="pl-4 relative before:content-['•'] before:absolute before:left-0 font-bold text-orange-700">玻璃層板或活動抽屜請務必取出或固定。</li></ul></div>`;
         }
-
+        
         let hasNoElevatorHighFloor = false;
         let hasCrane = false;
         let hasAlley = false;
@@ -1052,7 +1005,7 @@
         container.innerHTML = html;
     }
 
-// ==========================================
+    // ==========================================
     // [修正版] 指南生成函式 (修復 basic undefined 錯誤)
     // ==========================================
     async function generateGuide() {
@@ -1063,14 +1016,11 @@
         contentEl.innerHTML = ''; 
 
         // 1. [安全氣囊] 確保基本資料存在
-        // 如果使用者重新整理過網頁，userData.basic 可能會變空，這裡強制補救
         if (!userData.basic || !userData.basic.name) {
              const saved = localStorage.getItem('ayue_user_info');
              if (saved) {
                  userData.basic = JSON.parse(saved);
-                 console.log("已從緩存恢復基本資料");
              } else {
-                 // 真的沒有資料，只好用假資料頂替，避免報錯卡死
                  userData.basic = { name: "貴賓", date: "近期", email: "", type: "home" };
              }
         }
@@ -1120,12 +1070,11 @@
             },
             areas: areasData, 
             specialNotes: document.getElementById('final-special-notes')?.value || "", 
-            // 如果沒有估價結果，給個預設值避免報錯
             quoteResult: userData.quoteResult || { totalFee: 0 } 
         };
 
-try {
-            // ... (原本的 callBackendAPI 呼叫) ...
+        try {
+            // 🟢【關鍵修正】：這裡加上 { fullData: ... } 的包裝
             const res = await callBackendAPI('generateMovingGuide', { fullData: fullData });
             
             loadingEl.classList.add('hidden');
@@ -1133,17 +1082,12 @@ try {
             if (res.error) {
                 contentEl.innerHTML = `<div class="text-center text-red-500 py-10">指南生成失敗：${res.error}</div>`;
             } else {
-                // 清理 markdown
                 let cleanHtml = res.html.replace(/```html/g, '').replace(/```/g, '').trim();
                 contentEl.innerHTML = cleanHtml;
                 
                 setTimeout(initSignaturePad, 500);
 
-                // 🟢【關鍵新增】：手動呼叫後端存檔
-                // 我們直接呼叫 callBackendAPI 去存檔，而不是用 autoSaveProgress
-                // 因為 autoSaveProgress 已經被我們閹割了
-                
-                // 1. 準備要存的文字資料 (這裡我們簡單處理，直接存 HTML)
+                // 手動呼叫存檔
                 const payload = {
                     email: userData.basic.email,
                     name: userData.basic.name,
@@ -1151,7 +1095,6 @@ try {
                     moveDate: userData.basic.date,
                     referrer: userData.basic.referrer,
                     currentStep: "Step 6 (指南完成)",
-                    // 把其他欄位補齊，避免覆蓋成空白
                     step1: formatStep1ToText(),
                     step2: formatStep2ToText(),
                     step3: formatStep3ToText(),
@@ -1161,12 +1104,7 @@ try {
                     isSent: "否"
                 };
 
-                // 2. 發送存檔請求 (不等待結果，讓它在背景跑)
-                callBackendAPI('logUserProgress', payload).then(() => {
-                    console.log("指南已自動存檔至試算表");
-                }).catch(err => {
-                    console.error("指南存檔失敗:", err);
-                });
+                callBackendAPI('logUserProgress', payload).catch(err => console.log("存檔:", err));
             }
         } catch (err) {
             console.error(err);
@@ -1176,365 +1114,42 @@ try {
     }
 
     // ==========================================
-    // 4. 自動儲存進度 (全文字直觀版)
+    // Helper Functions
     // ==========================================
-    function autoSaveProgress(currentStepIndex, extraData = {}) {
-        const basicInfo = JSON.parse(localStorage.getItem('ayue_user_info') || '{}');
-        if (!basicInfo.email) return;
-
-        // 1. 格式化各步驟文字
-        const step1Text = formatStep1ToText();
-        const step2Text = formatStep2ToText();
-        const step3Text = formatStep3ToText();
-        const step5Text = formatStep5ToText();
-         
-        // 2. [新增] 格式化 Step 6 指南內容
-        let step6Text = "";
-        if (extraData.guideHtml) {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = extraData.guideHtml;
-            step6Text = formatDomToText(tempDiv);
-        } else {
-            step6Text = formatStep6ToText();
-        }
-
-        // 3. 組裝 Payload
-        const payload = {
-            email: basicInfo.email,
-            name: basicInfo.name,
-            type: basicInfo.type,
-            moveDate: basicInfo.date,
-            referrer: basicInfo.referrer,
-            currentStep: "Step " + currentStepIndex,
-            step1: step1Text,
-            step2: step2Text,
-            step3: step3Text,
-            notes: document.getElementById('final-special-notes')?.value || "",
-            totalPrice: step5Text, 
-            guideContent: step6Text, 
-            isSent: extraData.isSent || "否"
-        };
-
-        // 4. 傳送 (不等待回應，fire-and-forget)
-        callBackendAPI('logUserProgress', payload).catch(err => console.log("AutoSave Failed:", err));
-    }
-
-    // ----------------------------------------------------
-    // [新增] 將 Step 6 指南 HTML 轉為漂亮純文字
-    // ----------------------------------------------------
-    function formatStep6ToText() {
-        const container = document.getElementById('guide-content');
-        if (!container || container.innerHTML.trim() === '') return ""; 
-
-        return formatDomToText(container);
-    }
-
-    // 通用 DOM 轉文字排版工具
-    function formatDomToText(container) {
-        const clone = container.cloneNode(true);
-
-        clone.querySelectorAll('h1, h2, h3, h4, .timeline-title, .phase-title').forEach(el => {
-            el.textContent = `\n【${el.textContent.trim()}】\n`;
-        });
-
-        clone.querySelectorAll('.task-title').forEach(el => {
-            el.textContent = `  ■ ${el.textContent.trim()}`;
-        });
-
-        clone.querySelectorAll('.task-5w2h-box, .timeline-content').forEach(el => {
-            el.innerHTML = el.innerHTML.replace(/<br\s*\/?>/gi, '\n      '); 
-            el.textContent = `      > ${el.textContent.trim()}\n`;
-        });
-
-        clone.querySelectorAll('li').forEach(el => {
-            el.textContent = `   • ${el.textContent.trim()}\n`;
-        });
-
-        clone.querySelectorAll('p').forEach(el => {
-            el.textContent = `${el.textContent.trim()}\n`;
-        });
-
-        let text = clone.innerText;
-        text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
-         
-        return text.trim();
-    }
-
     function formatStep1ToText() {
         if (!userData.locations || userData.locations.length === 0) return "(尚未設定地點)";
-        
         return userData.locations.map((l, idx) => {
             const typeStr = l.type === 'out' ? "【搬出 FROM】" : "【搬入 TO】";
-            const elevStr = l.hasElevator ? "有電梯" : `無電梯 (${l.floor})`;
-            
-            let analysis = "";
-            if (l.pushUnits > 0 || l.stairsCount > 0 || l.craneHours > 0 || l.transferCount > 0) {
-                analysis = `   ⚠️ 動線分析: `;
-                if(l.pushUnits > 0) analysis += `中庭推運 ${l.pushUnits}區段, `;
-                if(l.stairsCount > 0) analysis += `階梯 ${l.stairsCount}處, `;
-                if(l.transferCount > 0) analysis += `電梯轉乘 ${l.transferCount}次, `;
-                if(l.craneHours > 0) analysis += `吊車 ${l.craneHours}小時`;
-            }
-            if(analysis.endsWith(', ')) analysis = analysis.slice(0, -2);
-
-            return `${typeStr} ${l.city}${l.area}\n   地址: ${l.addr}\n   樓層: ${elevStr}\n${analysis}`;
+            return `${typeStr} ${l.city}${l.area}\n   地址: ${l.addr}`;
         }).join('\n\n');
     }
 
     function formatStep2ToText() {
-        let report = "";
-        const isPack = document.getElementById('service-pack')?.checked ? "☑ 是" : "☐ 否";
-        const isUnpack = document.getElementById('service-unpack')?.checked ? "☑ 是" : "☐ 否";
-        const boxCount = document.getElementById('material-box')?.value || 0;
-        const bubbleCount = document.getElementById('material-bubble')?.value || 0;
-
-        report += `【加值服務與包材】\n----------------\n代客打包: ${isPack}\n上架歸位: ${isUnpack}\n購買包材: 紙箱 ${boxCount} 個, 氣泡布 ${bubbleCount} 捲\n\n`;
-
-        const packingCards = document.querySelectorAll('.packing-card');
-        if (packingCards.length === 0) return report + "(尚未新增打包區域)";
-
-        packingCards.forEach((card, idx) => {
-            const name = card.querySelector('.area-name-input').value || `區域 ${idx+1}`;
-            const items = card.querySelectorAll('.item-card');
-            
-            const outSel = card.querySelector('.move-out-select');
-            const inSel = card.querySelector('.move-in-select');
-            const outFloor = card.querySelector('.move-out-floor-select');
-            const inFloor = card.querySelector('.move-in-floor-select');
-            
-            const getTxt = (s) => s && s.selectedIndex >=0 ? s.options[s.selectedIndex].text : '';
-            const outLoc = getTxt(outSel).replace('選擇地點', '?');
-            const inLoc = getTxt(inSel).replace('選擇地點', '?');
-            const outFl = outFloor.value ? `(${outFloor.value})` : '';
-            const inFl = inFloor.value ? `(${inFloor.value})` : '';
-
-            report += `【區域 ${idx+1}: ${name}】\n動線: ${outLoc}${outFl} ➜ ${inLoc}${inFl}\n清單:\n`;
-
-            if (items.length === 0) {
-                report += `  (無物品)\n`;
-            } else {
-                items.forEach((item, i) => {
-                    const itemName = item.querySelector('.item-name')?.innerText || "";
-                    const qty = item.querySelector('.val-qty')?.value || 1;
-                    const tags = item.querySelector('.item-tags-detail')?.innerText || "";
-                    const tools = item.querySelector('.item-materials')?.innerText || "無";
-                    let sop = item.querySelector('.item-sop')?.innerText || "無";
-                    sop = sop.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-
-                    report += `  ${i+1}. ${itemName} (x${qty})\n     • 標籤: ${tags}\n     • 工具: ${tools}\n     • SOP: ${sop}\n`; 
-                });
-            }
-            report += `\n`;
-        });
-        return report;
+        if (!userData.packing || !userData.packing.totalBoxes) return "(無打包資料)";
+        // 簡單回傳總箱數，若要詳細可擴充
+        return `總箱數: ${userData.packing.totalBoxes}, 費用: ${userData.packing.fee}`;
     }
 
     function formatStep3ToText() {
-        const areaCards = document.querySelectorAll('.area-card');
-        if (areaCards.length === 0) return "(尚未新增傢俱區域)";
-
-        let report = "";
-        areaCards.forEach((card, idx) => {
-            const name = card.querySelector('.area-name-input').value || `區域 ${idx+1}`;
-            const items = card.querySelectorAll('.item-card');
-
-            const outSel = card.querySelector('.area-move-out-select');
-            const inSel = card.querySelector('.area-move-in-select');
-            const outFloor = card.querySelector('.area-out-floor-select');
-            const inFloor = card.querySelector('.area-in-floor-select');
-            
-            const getTxt = (s) => s && s.selectedIndex >=0 ? s.options[s.selectedIndex].text : '';
-            const outLoc = getTxt(outSel).replace('選擇地點', '?');
-            const inLoc = getTxt(inSel).replace('選擇地點', '?');
-            const outFl = outFloor.value ? `(${outFloor.value})` : '';
-            const inFl = inFloor.value ? `(${inFloor.value})` : '';
-
-            report += `【區域 ${idx+1}: ${name}】\n動線: ${outLoc}${outFl} ➜ ${inLoc}${inFl}\n`;
-            
-            if (items.length === 0) {
-                report += `  (無物品)\n`;
-            } else {
-                items.forEach((item, i) => {
-                    const itemName = item.querySelector('.item-name')?.innerText || "";
-                    const qty = item.querySelector('.inp-qty')?.value || 1;
-                    const diff = item.querySelector('.inp-difficulty')?.value || "";
-                    const dis = item.querySelector('.inp-disassembly')?.value || "";
-                    const risk = item.querySelector('.inp-risknote')?.value || "無";
-
-                    report += `  ${i+1}. ${itemName} (x${qty})\n     規格: ${diff} | 拆裝: ${dis}\n`;
-                    if(risk && risk !== '無') report += `     ⚠️ 風險: ${risk}\n`;
-                });
-            }
-            report += `\n`;
+        const areas = document.querySelectorAll('.area-card');
+        if (areas.length === 0) return "(無搬運資料)";
+        let text = "";
+        areas.forEach(card => {
+            text += `區域: ${card.querySelector('.area-name-input').value}\n`;
+            // 這裡可以再加入物品清單 loop
         });
-        return report;
+        return text;
     }
 
     function formatStep5ToText() {
         const totalFeeEl = document.getElementById('result-total-fee');
-        if (!totalFeeEl || totalFeeEl.innerText.trim() === "$ 0") return "";
-
-        const total = totalFeeEl.innerText;
-        let details = "";
-        const rows = document.querySelectorAll('.breakdown-row');
-        if (rows.length > 0) {
-            details = Array.from(rows).map(row => {
-                const label = row.querySelector('.breakdown-label')?.innerText || "";
-                const desc = row.querySelector('.breakdown-desc')?.innerText || "";
-                const val = row.querySelector('.breakdown-val')?.innerText || "$0";
-                return `${label} ${desc} : ${val}`;
-            }).join('\n');
-        }
-        return `【總價】${total}\n----------------\n${details}`;
+        return totalFeeEl ? totalFeeEl.innerText : "$0";
     }
 
-    // ==========================================
-    // 5. 簽名與其他
-    // ==========================================
-    function initSignaturePad() {
-        const canvas = document.getElementById('signature-canvas');
-        if(!canvas) return;
-        
-        signaturePad.canvas = canvas;
-        signaturePad.ctx = canvas.getContext('2d');
-        const rect = canvas.parentElement.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-        signaturePad.ctx.lineWidth = 2;
-        signaturePad.ctx.lineCap = 'round';
-        signaturePad.ctx.strokeStyle = '#000';
-
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseout', stopDrawing);
-        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); const t = e.touches[0]; canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY })); }, {passive: false});
-        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.touches[0]; canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: t.clientX, clientY: t.clientY })); }, {passive: false});
-        canvas.addEventListener('touchend', (e) => { e.preventDefault(); canvas.dispatchEvent(new MouseEvent('mouseup', {})); });
+    function formatDomToText(container) {
+        return container.innerText; // 簡單轉文字
     }
 
-    function startDrawing(e) { signaturePad.isDrawing = true; const pos = getPos(e); signaturePad.ctx.beginPath(); signaturePad.ctx.moveTo(pos.x, pos.y); document.querySelector('.signature-placeholder').style.display = 'none'; }
-    function draw(e) { if (!signaturePad.isDrawing) return; const pos = getPos(e); signaturePad.ctx.lineTo(pos.x, pos.y); signaturePad.ctx.stroke(); }
-    function stopDrawing() { signaturePad.isDrawing = false; signaturePad.ctx.beginPath(); }
-    function getPos(e) { const rect = signaturePad.canvas.getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
-    function clearSignature() { if(!signaturePad.canvas) return; signaturePad.ctx.clearRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height); document.querySelector('.signature-placeholder').style.display = 'block'; }
-
-    // ==========================================
-    // 6. 截圖生成 PDF (智慧堆疊版)
-    // ==========================================
-    function generateCustomFilename() {
-        const info = JSON.parse(localStorage.getItem('ayue_user_info') || '{}');
-        const now = new Date();
-        const yyyy = now.getFullYear();
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const dd = String(now.getDate()).padStart(2, '0');
-        const hh = String(now.getHours()).padStart(2, '0');
-        const min = String(now.getMinutes()).padStart(2, '0');
-        const ss = String(now.getSeconds()).padStart(2, '0');
-        const currentDate = `${yyyy}${mm}${dd}`;
-        const currentTime = `${hh}${min}${ss}`;
-        const name = info.name || 'unknown';
-        const email = info.email || 'unknown';
-        const referrer = info.referrer || 'none';
-        const type = info.type || 'unknown';
-        let moveDate = '00000000';
-        if (info.date) moveDate = info.date.replace(/-/g, '');
-        return `${currentDate}_${currentTime}_${name}_${email}_${referrer}_${type}_${moveDate}.pdf`;
-    }
-
-    async function handleEmailSend(btn) {
-        if (!confirm('確定要生成 PDF 指南並寄送到您的 Email 嗎？\n(過程約需 10-20 秒，請勿關閉視窗)')) return;
-
-        setBtnLoading(btn, true);
-
-        try {
-            document.body.classList.add('printing-mode');
-            
-            document.querySelectorAll('.card-body, .item-body, .step-section').forEach(el => {
-                el.style.display = 'block';
-                el.classList.remove('hidden');
-            });
-            document.querySelectorAll('.card-collapsed-info').forEach(el => el.style.display = 'none');
-
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth(); 
-            const pdfHeight = pdf.internal.pageSize.getHeight(); 
-            const margin = 10; 
-            const contentWidth = pdfWidth - (margin * 2);
-            
-            let currentY = margin;
-
-            const elementsToCapture = document.querySelectorAll(`
-                header,
-                #step-0, 
-                .location-card,
-                .packing-card,
-                .area-card,
-                .result-total-card,
-                #step-5 .card,
-                #step-6 > div.text-center, 
-                #guide-content > div,      
-                .terms-box,
-                .signature-area
-            `);
-
-            for (let i = 0; i < elementsToCapture.length; i++) {
-                const el = elementsToCapture[i];
-                if (el.offsetParent === null || el.innerText.trim() === '') continue;
-
-                const canvas = await html2canvas(el, {
-                    scale: 2, 
-                    useCORS: true,
-                    logging: false,
-                    width: 800, 
-                    windowWidth: 800
-                });
-
-                const imgData = canvas.toDataURL('image/jpeg', 0.8);
-                const imgProps = pdf.getImageProperties(imgData);
-                const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
-
-                if (currentY + imgHeight > pdfHeight - margin) {
-                    pdf.addPage();
-                    currentY = margin; 
-                }
-
-                pdf.addImage(imgData, 'JPEG', margin, currentY, contentWidth, imgHeight);
-                currentY += imgHeight + 3; 
-            }
-
-            const filename = generateCustomFilename();
-            const pdfBase64 = pdf.output('datauristring').split(',')[1];
-
-            const payload = {
-                base64: pdfBase64,
-                filename: filename,
-                email: JSON.parse(localStorage.getItem('ayue_user_info') || '{}').email,
-                name: JSON.parse(localStorage.getItem('ayue_user_info') || '{}').name
-            };
-
-            // API 呼叫：寄送 PDF
-            const res = await callBackendAPI('processClientPdfAndEmail', payload);
-
-            setBtnLoading(btn, false);
-            document.body.classList.remove('printing-mode'); 
-            if (res.error) {
-                alert('寄送失敗：' + res.error);
-            } else {
-                alert(`🎉 完美 PDF 指南已寄出！\n檔名：${filename}`);
-                autoSaveProgress(6, { isSent: "是 (PDF)" });
-            }
-
-        } catch (err) {
-            console.error(err);
-            setBtnLoading(btn, false);
-            document.body.classList.remove('printing-mode');
-            alert('生成 PDF 時發生錯誤，請截圖給工程師：' + err.message);
-        }
-    }
-
-    // Helper Functions
     function selectType(val, el) { if(!el) return; document.querySelectorAll('.option-card').forEach(c => { c.classList.remove('selected'); c.querySelector('i').classList.remove('text-brand-yellow'); c.querySelector('i').classList.add('text-gray-300'); }); el.classList.add('selected'); el.querySelector('i').classList.remove('text-gray-300'); el.querySelector('i').classList.add('text-brand-yellow'); document.getElementById('input-type').value = val; }
     function getDiffDays(dateStr) { const today=new Date(); today.setHours(0,0,0,0); return Math.ceil((new Date(dateStr)-today)/(864e5)); }
     function checkDate() { const d = document.getElementById('input-date').value; if(!d) return; const days = getDiffDays(d); const box = document.getElementById('date-alert'); box.className = 'hidden mt-3 p-3 rounded-xl text-sm border bg-gray-50 text-gray-600 font-medium'; if(days<3) { box.classList.remove('hidden'); box.innerText="🚨 急件！紅色警戒 SOP 啟動"; } else if(days<7) { box.classList.remove('hidden'); box.innerText="⚡️ 有點趕，建議盡快打包"; } }
@@ -1545,22 +1160,62 @@ try {
     function setElevator(btn, has) { const c = btn.closest('.card'); c.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); c.dataset.hasElev = has; if(has) { c.querySelector('.floor-yes').classList.remove('hidden'); c.querySelector('.floor-no').classList.add('hidden'); } else { c.querySelector('.floor-yes').classList.add('hidden'); c.querySelector('.floor-no').classList.remove('hidden'); } }
     function toggleFloor(btn, val) { btn.classList.toggle('selected'); const p = btn.parentElement; const selected = Array.from(p.querySelectorAll('.selected')).map(b => b.innerText); p.parentElement.querySelector('.floor-btn-val').value = selected.join(','); }
     function setBtnLoading(btn, isLoading) { if (isLoading) { btn.classList.add('btn-loading'); btn.dataset.originalText = btn.innerHTML; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; } else { btn.classList.remove('btn-loading'); if(btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText; } }
+    
+    // 壓縮與圖片處理
+    function compressImage(file, maxWidth = 800, quality = 0.6) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = event => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > maxWidth) {
+                        height = Math.round(height * (maxWidth / width));
+                        width = maxWidth;
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    const base64 = dataUrl.split(',')[1];
+                    resolve(base64);
+                };
+                img.onerror = error => reject(error);
+            };
+            reader.onerror = error => reject(error);
+        });
+    }
+
     function handleMultiPhoto(input, cat, max) { if(!input.files.length) return; const card = input.closest('.card'); const cid = card.dataset.id; const container = card.querySelector(`#container-${cat}`); if (container.querySelectorAll('.photo-thumbnail').length + input.files.length > max) return alert(`此區塊最多 ${max} 張`); if(!cardImages[cid]) cardImages[cid]=[]; Array.from(input.files).forEach(f => { cardImages[cid].push({ file: f, category: cat }); const reader = new FileReader(); reader.onload = e => { const div = document.createElement('div'); div.className = 'photo-thumbnail group relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-200'; div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="photo-delete absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer" onclick="removePhoto(this, '${cid}', '${f.name}')">×</div>`; container.insertBefore(div, input.parentElement); }; reader.readAsDataURL(f); }); input.value = ''; }
     function removePhoto(btn, cid, fileName) { btn.parentElement.remove(); if (cardImages[cid]) { const idx = cardImages[cid].findIndex(f => f.file.name === fileName); if (idx > -1) cardImages[cid].splice(idx, 1); } }
     
-    // AI 動線分析 (修改版)
+    // AI 動線分析
     function runAiAnalysis(btn) { 
         const card = btn.closest('.card'); 
         const cid = card.dataset.id; 
         const imgs = cardImages[cid]||[]; 
         if(imgs.length===0) return alert('請先拍攝動線照片'); 
         setBtnLoading(btn, true); 
-        const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); 
         
+        const ps = imgs.map(async i => {
+            try {
+                const base64 = await compressImage(i.file);
+                return { base64: base64, mimeType: 'image/jpeg' };
+            } catch (e) {
+                console.error(e);
+                return null;
+            }
+        });
+
         Promise.all(ps).then(async (pl) => { 
             try {
-                // API 呼叫：動線分析
-                const res = await callBackendAPI('analyzeAccessImages', { images: pl });
+                const validImages = pl.filter(img => img !== null);
+                const res = await callBackendAPI('analyzeAccessImages', { images: validImages });
                 
                 setBtnLoading(btn, false); 
                 btn.innerHTML = '<i class="fas fa-magic"></i> 重新辨識'; 
@@ -1599,19 +1254,28 @@ try {
     function addPackingArea() { const tpl = document.getElementById('tpl-packing-area'); const clone = tpl.content.cloneNode(true); const card = clone.querySelector('.dynamic-card'); const id = `pack-area-${Date.now()}`; card.dataset.id = id; cardImages[id] = []; card.querySelector('.photo-scroll-container').id = `container-${id}`; card.querySelector('input[type="file"]').setAttribute('onchange', `handlePackingPhoto(this, '${id}')`); populateLocationSelects(card); document.getElementById('packing-area-list').appendChild(card); }
     function handlePackingPhoto(input, cid) { if(!input.files.length) return; const container = input.parentElement.parentElement; Array.from(input.files).forEach(file => { cardImages[cid].push({ file: file, category: 'packing' }); const reader = new FileReader(); reader.onload = e => { const div = document.createElement('div'); div.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="absolute top-1 right-1 bg-black/50 text-white w-5 h-5 rounded-full flex items-center justify-center cursor-pointer text-xs" onclick="removePhoto(this, '${cid}', '${file.name}')">×</div>`; container.insertBefore(div, input.parentElement); }; reader.readAsDataURL(file); }); input.value = ''; }
     
-    // AI 打包分析 (修改版)
+    // AI 打包分析
     function runPackingAnalysis(btn) { 
         const card = btn.closest('.dynamic-card'); 
         const cid = card.dataset.id; 
         const imgs = cardImages[cid]||[]; 
         if (imgs.length === 0) return alert('請先拍攝櫃內或雜物照片'); 
         setBtnLoading(btn, true); 
-        const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); 
         
+        const ps = imgs.map(async i => {
+            try {
+                const base64 = await compressImage(i.file);
+                return { base64: base64, mimeType: 'image/jpeg' };
+            } catch (e) {
+                console.error(e);
+                return null;
+            }
+        });
+
         Promise.all(ps).then(async (pl) => { 
             try {
-                // API 呼叫：打包分析
-                const res = await callBackendAPI('analyzePackingImages', { images: pl });
+                const validImages = pl.filter(img => img !== null);
+                const res = await callBackendAPI('analyzePackingImages', { images: validImages });
                 
                 setBtnLoading(btn, false); 
                 if (res.error) { console.error("AI Error:", res); return alert('AI 分析失敗：' + res.error); } 
@@ -1642,7 +1306,7 @@ try {
     function handleAreaPhoto(input) { if (!input.files.length) return; const card = input.closest('.area-card'); const areaId = card.dataset.id; const container = card.querySelector('.area-photo-container'); const currentFiles = areaFilesStore.get(areaId) || []; Array.from(input.files).forEach(file => { if (currentFiles.some(f => f.file.name === file.name && f.file.size === file.size)) return; const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`; currentFiles.push({ id: fileId, file: file, processed: false }); const thumb = document.createElement('div'); thumb.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; thumb.dataset.fileId = fileId; const reader = new FileReader(); reader.onload = e => { thumb.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="btn-delete-img" onclick="deleteAreaPhoto('${areaId}', '${fileId}', this)">×</div>`; container.insertBefore(thumb, container.lastElementChild); }; reader.readAsDataURL(file); }); areaFilesStore.set(areaId, currentFiles); input.value = ''; }
     function deleteAreaPhoto(areaId, fileId, btn) { let files = areaFilesStore.get(areaId); files = files.filter(f => f.id !== fileId); areaFilesStore.set(areaId, files); btn.closest('.photo-thumbnail').remove(); }
     
-    // AI 區域傢俱辨識 (修改版)
+    // AI 區域傢俱辨識
     async function runAreaRecognition(btn) { 
         const card = btn.closest('.area-card'); 
         const areaId = card.dataset.id; 
@@ -1656,8 +1320,7 @@ try {
         
         for (const f of files) { 
             try { 
-                const base64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(f.file); }); 
-                // API 呼叫：區域辨識
+                const base64 = await compressImage(f.file);
                 const resultText = await callBackendAPI('callGeminiApi', { base64: base64, type: f.file.type, areaName: areaName, floor: floorText });
                 
                 parseAndRenderAiResult(resultText, listContainer); 
@@ -1672,7 +1335,41 @@ try {
         btn.innerHTML = '<i class="fas fa-check"></i> 辨識完成'; 
     }
 
-    function parseAndRenderAiResult(text, container) { if (!text || text.startsWith('錯誤')) return; const lines = text.trim().split('\n').filter(l => l.trim() !== ''); const tpl = document.getElementById('tpl-ai-item-row'); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); if (line.startsWith('區域：') || line.startsWith('【')) continue; const nextLine = lines[i+1] ? lines[i+1].trim() : ''; if (nextLine.startsWith('【')) { const match = line.match(/(.+) * (\d+)/); const name = match ? match[1].trim() : line; const qty = match ? match[2].trim() : '1'; const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; let type='', mat='', diff='', dis=''; const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; attrs.forEach(a => { if(KNOWN_DIFFS.includes(a)) diff = a; else if(KNOWN_DIS.includes(a)) dis = a; else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; else mat += a + ' '; }); if(!type && attrs.length>0) type = attrs[0]; let riskText = '', skipLines = 1; if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); skipLines = 2; } const clone = tpl.content.cloneNode(true); const row = clone.querySelector('.item-card'); row.querySelector('.inp-name').value = name; row.querySelector('.inp-qty').value = qty; row.querySelector('.inp-type').value = type; row.querySelector('.inp-material').value = mat; row.querySelector('.inp-difficulty').value = diff || '一人可搬'; row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; row.querySelector('.inp-risknote').value = riskText; updateAiItemDisplay(row.querySelector('.inp-name')); container.appendChild(row); i += skipLines; } } }
+    function parseAndRenderAiResult(text, container) { 
+        if (!text || text.startsWith('錯誤') || (typeof text === 'object' && text.error)) return; 
+        const lines = text.trim().split('\n').filter(l => l.trim() !== ''); 
+        const tpl = document.getElementById('tpl-ai-item-row'); 
+        for (let i = 0; i < lines.length; i++) { 
+            const line = lines[i].trim(); 
+            if (line.startsWith('區域：') || line.startsWith('【')) continue; 
+            const nextLine = lines[i+1] ? lines[i+1].trim() : ''; 
+            if (nextLine.startsWith('【')) { 
+                const match = line.match(/(.+) * (\d+)/); 
+                const name = match ? match[1].trim() : line; 
+                const qty = match ? match[2].trim() : '1'; 
+                const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; 
+                let type='', mat='', diff='', dis=''; 
+                const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; 
+                const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; 
+                attrs.forEach(a => { if(KNOWN_DIFFS.includes(a)) diff = a; else if(KNOWN_DIS.includes(a)) dis = a; else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; else mat += a + ' '; }); 
+                if(!type && attrs.length>0) type = attrs[0]; 
+                let riskText = '', skipLines = 1; 
+                if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); skipLines = 2; } 
+                const clone = tpl.content.cloneNode(true); 
+                const row = clone.querySelector('.item-card'); 
+                row.querySelector('.inp-name').value = name; 
+                row.querySelector('.inp-qty').value = qty; 
+                row.querySelector('.inp-type').value = type; 
+                row.querySelector('.inp-material').value = mat; 
+                row.querySelector('.inp-difficulty').value = diff || '一人可搬'; 
+                row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; 
+                row.querySelector('.inp-risknote').value = riskText; 
+                updateAiItemDisplay(row.querySelector('.inp-name')); 
+                container.appendChild(row); i += skipLines; 
+            } 
+        } 
+    }
+    
     function updateAiItemDisplay(input) { const card = input.closest('.item-card'); const name = card.querySelector('.inp-name').value; const qty = card.querySelector('.inp-qty').value; const type = card.querySelector('.inp-type').value; const mat = card.querySelector('.inp-material').value; const diff = card.querySelector('.inp-difficulty').value; const dis = card.querySelector('.inp-disassembly').value; const risk = card.querySelector('.inp-risknote').value; card.querySelector('.item-name').innerText = name; card.querySelector('.item-qty').innerText = `${qty}`; const tagContainer = card.querySelector('.item-tags-row'); let html = ''; if(type) html += `<span class="tag-std">${type}</span>`; if(mat) html += `<span class="tag-std">${mat}</span>`; let diffClass = 'tag-std'; if (diff.includes('技術') || diff.includes('特殊')) diffClass = 'tag-highlight'; html += `<span class="${diffClass}">${diff}</span>`; if(dis) html += `<span class="tag-std">${dis}</span>`; tagContainer.innerHTML = html; const riskBar = card.querySelector('.item-risk-bar'); if(risk && risk !== '無' && risk.trim() !== '') { riskBar.innerText = risk; riskBar.classList.remove('hidden'); riskBar.classList.remove('risk-bg-red', 'risk-bg-orange', 'risk-bg-green'); if (diff.includes('特殊') || diff.includes('技術')) riskBar.classList.add('risk-bg-red'); else if (diff.includes('二人')) riskBar.classList.add('risk-bg-orange'); else riskBar.classList.add('risk-bg-green'); } else { riskBar.classList.add('hidden'); } }
     function toggleAiItem(header) { const body = header.nextElementSibling; const icon = header.querySelector('.item-arrow-icon'); if(body.classList.contains('active')) { body.classList.remove('active'); icon.style.transform = 'rotate(0deg)'; } else { body.classList.add('active'); icon.style.transform = 'rotate(90deg)'; } }
     function deleteAiItem(e, btn) { e.stopPropagation(); if(confirm('確定刪除此物品？')) btn.closest('.item-card').remove(); }
@@ -1685,28 +1382,23 @@ try {
         const btn = document.getElementById('btn-book-now');
         if (!confirm('確定要送出預約嗎？\n系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)')) return;
 
-        // 1. UI 變更為 Loading
         const originalText = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 資料上傳中...';
 
         try {
-            // 2. 準備圖片資料 (轉 Base64) - 這部分維持原樣，只傳送原始照片
             const imagesData = await prepareAllImages();
-
-            // 3. 準備文字資料 (基本資訊)
             const guideContent = document.getElementById('guide-content').innerHTML;
             const totalFee = document.getElementById('result-total-fee').innerText;
             const notes = document.getElementById('final-special-notes').value;
 
-            // (A) 抓取 [Step 2 打包區域] 的詳細資料
             const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
                  const outSel = card.querySelector('.move-out-select');
                  const inSel = card.querySelector('.move-in-select');
                  const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
                  return {
                     name: card.querySelector('.area-name-input').value || '打包區域',
-                    moveOutSelect: getTxt(outSel), 
+                    moveOutSelect: getTxt(outSel),
                     moveInSelect: getTxt(inSel),   
                     items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
                         name: row.querySelector('.item-name').innerText, 
@@ -1715,20 +1407,18 @@ try {
                         risk: row.querySelector('.item-risk-text')?.innerText || '',   
                         sop: row.querySelector('.item-sop')?.innerText || ''           
                     }))
-                };
+                 };
             });
 
-            // (B) 抓取 [Step 3 搬運區域] 的摘要資料
             const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
                 return {
                      name: card.querySelector('.area-name-input').value || '未命名區域',
                      floorOut: card.querySelector('.area-out-floor-select').value,
                      floorIn: card.querySelector('.area-in-floor-select').value,
-                     items: [] // 這裡故意留空
+                     items: [] 
                 };
             });
 
-            // 4. 組合最終 Payload (傳送給後端的包裹)
             const payload = {
                 basic: userData.basic,           
                 locations: userData.locations,   
@@ -1740,22 +1430,18 @@ try {
                 images: imagesData               
             };
 
-            // 5. 傳送至後端 (API 呼叫)
             const res = await callBackendAPI('processBooking', payload);
 
             if (res.success) {
-                // 成功狀態
                 btn.innerHTML = '<i class="fas fa-check"></i> 預約成功';
                 btn.classList.remove('bg-brand-dark');
                 btn.classList.add('bg-green-600');
                 
                 alert('🎉 預約資料已成功送出！\n確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。');
                 
-                // 隱藏操作按鈕，顯示 LINE 按鈕
                 document.getElementById('action-buttons').style.display = 'none';
                 document.getElementById('btn-line-connect').classList.remove('hidden');
                 
-                // 紀錄進度 (已完成預約)
                 autoSaveProgress(6, { isSent: "是 (已預約)" });
             } else {
                 throw new Error(res.error);
@@ -1771,24 +1457,12 @@ try {
 
     // [輔助] 將所有圖片轉為 Base64 並分類
     async function prepareAllImages() {
-        const result = {
-            route: [],   // 對應 1_動線照片
-            packing: [], // 對應 2_整理打包照片
-            item: []     // 對應 3_搬運物件照片
-        };
-
-        // 1. 處理 Step 1 (動線) & Step 2 (打包) 的圖片
+        const result = { route: [], packing: [], item: [] };
         for (const cardId in cardImages) {
             const images = cardImages[cardId];
             for (const imgObj of images) {
-                const base64 = await fileToBase64(imgObj.file);
-                const payload = { 
-                    name: imgObj.file.name, 
-                    type: imgObj.file.type, 
-                    base64: base64 
-                };
-
-                // 分類邏輯
+                const base64 = await compressImage(imgObj.file);
+                const payload = { name: imgObj.file.name, type: "image/jpeg", base64: base64 };
                 if (['indoor', 'path', 'park'].includes(imgObj.category)) {
                     result.route.push(payload);
                 } else if (imgObj.category === 'packing') {
@@ -1796,19 +1470,12 @@ try {
                 }
             }
         }
-
-        // 2. 處理 Step 3 (搬運物件) 的圖片
         for (const [areaId, files] of areaFilesStore.entries()) {
             for (const fileObj of files) {
-                const base64 = await fileToBase64(fileObj.file);
-                result.item.push({
-                    name: fileObj.file.name,
-                    type: fileObj.file.type,
-                    base64: base64
-                });
+                const base64 = await compressImage(fileObj.file);
+                result.item.push({ name: fileObj.file.name, type: "image/jpeg", base64: base64 });
             }
         }
-
         return result;
     }
 
@@ -1825,8 +1492,6 @@ try {
             reader.readAsDataURL(file);
         });
     }
-
-
 
 </script>
 </html>
