@@ -1089,69 +1089,83 @@
     }
 
     // 【新增】簽名板初始化函式 (原本缺少的程式碼)
-    function initSignaturePad() {
-        const canvas = document.getElementById('signature-canvas');
-        if (!canvas) return;
-        
-        const parent = canvas.parentElement;
-        canvas.width = parent.clientWidth;
-        canvas.height = parent.clientHeight;
-        
-        const ctx = canvas.getContext('2d');
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        
-        signaturePad.canvas = canvas;
-        signaturePad.ctx = ctx;
-        
-        const startDraw = (e) => {
-            signaturePad.isDrawing = true;
-            document.querySelector('.signature-placeholder').style.display = 'none';
-            ctx.beginPath();
-            const { x, y } = getPos(e);
-            ctx.moveTo(x, y);
-        };
-        
-        const draw = (e) => {
-            if (!signaturePad.isDrawing) return;
-            e.preventDefault();
-            const { x, y } = getPos(e);
-            ctx.lineTo(x, y);
-            ctx.stroke();
-        };
-        
-        const stopDraw = () => {
-            signaturePad.isDrawing = false;
-        };
-        
-        const getPos = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return {
-                x: clientX - rect.left,
-                y: clientY - rect.top
-            };
-        };
-        
-        canvas.addEventListener('mousedown', startDraw);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDraw);
-        canvas.addEventListener('mouseout', stopDraw);
-        
-        canvas.addEventListener('touchstart', startDraw, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        canvas.addEventListener('touchend', stopDraw);
-    }
+// ==========================================
+  // 7. 簽名板功能 (補上這段即可修復紅色錯誤)
+  // ==========================================
+  
+  function initSignaturePad() {
+      const canvas = document.getElementById('signature-canvas');
+      if (!canvas) return;
+      
+      // 設定畫布大小符合容器
+      const parent = canvas.parentElement;
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientHeight;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      
+      signaturePad.canvas = canvas;
+      signaturePad.ctx = ctx;
+      
+      // 繪圖事件處理
+      const startDraw = (e) => {
+          signaturePad.isDrawing = true;
+          // 隱藏 "請在此簽名" 的提示字
+          const placeholder = document.querySelector('.signature-placeholder');
+          if(placeholder) placeholder.style.display = 'none';
+          
+          ctx.beginPath();
+          const { x, y } = getPos(e);
+          ctx.moveTo(x, y);
+      };
+      
+      const draw = (e) => {
+          if (!signaturePad.isDrawing) return;
+          e.preventDefault(); // 防止手機滑動頁面
+          const { x, y } = getPos(e);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+      };
+      
+      const stopDraw = () => {
+          signaturePad.isDrawing = false;
+      };
+      
+      // 取得座標 (兼容滑鼠與觸控)
+      const getPos = (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          return {
+              x: clientX - rect.left,
+              y: clientY - rect.top
+          };
+      };
+      
+      // 綁定事件 (滑鼠)
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDraw);
+      canvas.addEventListener('mouseout', stopDraw);
+      
+      // 綁定事件 (觸控/手機)
+      canvas.addEventListener('touchstart', startDraw, { passive: false });
+      canvas.addEventListener('touchmove', draw, { passive: false });
+      canvas.addEventListener('touchend', stopDraw);
+  }
 
-    // 【新增】清除簽名
-    function clearSignature() {
-        if (!signaturePad.canvas) return;
-        const ctx = signaturePad.ctx;
-        ctx.clearRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height);
-        document.querySelector('.signature-placeholder').style.display = 'block';
-    }
+  // 清除簽名按鈕的功能
+  function clearSignature() {
+      if (!signaturePad.canvas) return;
+      const ctx = signaturePad.ctx;
+      ctx.clearRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height);
+      const placeholder = document.querySelector('.signature-placeholder');
+      if(placeholder) placeholder.style.display = 'block';
+  }
+  
 
     // ==========================================
     // 5. Helper Functions & UI Logic
