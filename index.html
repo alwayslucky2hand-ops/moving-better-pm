@@ -11,6 +11,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
@@ -19,56 +20,34 @@
         // 設定你的 GAS 部署網址
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycby26aVxlIh5jgj9nKH2AqKCDc5RK0cfpSdr3XEQ8eRmkJrvG-b5YFYnp-MzMZiO72IjHw/exec";
 
-        // 模擬 google.script.run 環境
         window.google = window.google || {};
         window.google.script = window.google.script || {};
         
         window.google.script.run = {
-            withSuccessHandler: function(callback) {
-                this._successHandler = callback;
-                return this;
-            },
-            withFailureHandler: function(callback) {
-                this._failureHandler = callback;
-                return this;
-            }
+            withSuccessHandler: function(callback) { this._successHandler = callback; return this; },
+            withFailureHandler: function(callback) { this._failureHandler = callback; return this; }
         };
 
-        // 使用 Proxy 攔截呼叫
         const handler = {
             get: function(target, prop) {
-                if (prop === 'withSuccessHandler' || prop === 'withFailureHandler' || prop.startsWith('_')) {
-                    return target[prop];
-                }
-
+                if (['withSuccessHandler', 'withFailureHandler'].includes(prop) || prop.startsWith('_')) return target[prop];
                 return function(...args) {
-                    console.log(`[GAS Adapter] 呼叫後端功能: ${prop}`, args);
-
-                    // [重點修正] 這裡必須送出 'action'，因為你的 GAS 後端是用 request.action 來判斷
-                    // 同時我也送出 func/functionName 以防萬一
+                    console.log(`[GAS Adapter] Calling: ${prop}`, args);
+                    
+                    // 根據不同的後端函式，對應不同的參數名稱 (與後端 doPost 對接)
                     const payload = JSON.stringify({
-                        action: prop,       // <--- 這是修復 undefined 錯誤的關鍵
+                        action: prop,       
                         functionName: prop, 
-                        // 針對不同函式，包裝參數結構以符合後端預期
-                        // 這裡將參數陣列直接傳送，後端需對應解構 (依照你提供的 GAS 邏輯，參數通常是單一物件或多個)
-                        // 為了通用性，我們將參數陣列直接命名為 parameters，但也針對特定函式做特化處理
-                        images: (prop === 'analyzeAccessImages' || prop === 'analyzePackingImages') ? args[0] : null,
+                        // 參數對應表
+                        images: (['analyzeAccessImages', 'analyzePackingImages'].includes(prop)) ? args[0] : null,
                         base64Image: (prop === 'callGeminiApi') ? args[0] : null,
                         mimeType: (prop === 'callGeminiApi') ? args[1] : null,
                         areaName: (prop === 'callGeminiApi') ? args[2] : null,
                         floorInfo: (prop === 'callGeminiApi') ? args[3] : null,
-                        
-                        // 針對 calculateFullQuote
                         req: (prop === 'calculateFullQuote') ? args[0] : null,
                         rowNum: (prop === 'calculateFullQuote') ? args[1] : null,
-
-                        // 針對 generateMovingGuide
                         fullData: (prop === 'generateMovingGuide') ? args[0] : null,
-
-                        // 針對 processBooking, logUserProgress
-                        data: (prop === 'processBooking' || prop === 'logUserProgress') ? args[0] : null,
-
-                        // 針對 checkReferrerCode
+                        data: (['processBooking', 'logUserProgress'].includes(prop)) ? args[0] : null,
                         code: (prop === 'checkReferrerCode') ? args[0] : null
                     });
 
@@ -77,33 +56,17 @@
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: payload
                     })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (target._successHandler) {
-                            target._successHandler(data);
-                        }
-                    })
+                    .then(res => res.json())
+                    .then(data => { if (target._successHandler) target._successHandler(data); })
                     .catch(err => {
-                        console.error(`[GAS Adapter] Error calling ${prop}:`, err);
-                        if (target._failureHandler) {
-                            target._failureHandler(err);
-                        } else {
-                            // 使用 SweetAlert 取代 alert
-                            Swal.fire({
-                                title: '連線錯誤',
-                                text: '無法連接到伺服器，請檢查網路。',
-                                icon: 'error'
-                            });
-                        }
+                        console.error(`[GAS Error] ${prop}:`, err);
+                        if (target._failureHandler) target._failureHandler(err);
+                        else Swal.fire({ title: '連線錯誤', text: '無法連接伺服器', icon: 'error' });
                     })
-                    .finally(() => {
-                        target._successHandler = null;
-                        target._failureHandler = null;
-                    });
+                    .finally(() => { target._successHandler = null; target._failureHandler = null; });
                 };
             }
         };
-
         window.google.script.run = new Proxy(window.google.script.run, handler);
     })();
   </script>
@@ -112,9 +75,7 @@
     tailwind.config = {
       theme: {
         extend: {
-          colors: {
-            brand: { bg: '#FDFBF5', yellow: '#FDB813', teal: '#4FD0C9', dark: '#2A2A2A', red: '#FF6B6B', primary: '#FDB813' }
-          },
+          colors: { brand: { bg: '#FDFBF5', yellow: '#FDB813', teal: '#4FD0C9', dark: '#2A2A2A', red: '#FF6B6B', primary: '#FDB813' } },
           fontFamily: { sans: ['Noto Sans TC', 'sans-serif'] }
         }
       }
@@ -122,57 +83,32 @@
   </script>
 
 <style>
-    /* =========================================
-       1. 基礎設定
-       ========================================= */
     body { background-color: #FDFBF5; color: #2A2A2A; -webkit-font-smoothing: antialiased; padding-bottom: 80px; }
-      
     details > summary { list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
-    details > summary::marker { display: none; }
-
-    /* =========================================
-       2. 動畫與區塊
-       ========================================= */
-    .step-section { 
-        display: none; 
-        opacity: 0; 
-        scroll-margin-top: 100px; 
-        transition: opacity 0.5s ease-in-out;
-    }
     
-    .step-section.active { 
-        display: block; 
-        animation: slideUpFade 0.5s forwards; 
-    }
+    /* 步驟動畫 */
+    .step-section { display: none; opacity: 0; scroll-margin-top: 100px; transition: opacity 0.5s ease-in-out; }
+    .step-section.active { display: block; animation: slideUpFade 0.5s forwards; }
+    @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    @keyframes slideUpFade { 
-        from { opacity: 0; transform: translateY(20px); } 
-        to { opacity: 1; transform: translateY(0); } 
-    }
-
-    /* =========================================
-       3. UI 元件
-       ========================================= */
+    /* UI 元件 */
     .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.03); margin-bottom: 16px; position: relative; }
     .input-field, .select-field, textarea { width: 100%; padding: 12px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px; font-size: 15px; outline: none; transition: all 0.2s; }
     .input-field:focus, .select-field:focus, textarea:focus { border-color: #FDB813; background-color: #FFF; ring: 2px solid #FDB813; }
     textarea { resize: vertical; min-height: 80px; }
-      
     .btn-main { background: #2A2A2A; color: white; font-weight: 700; border-radius: 50px; padding: 16px; width: 100%; box-shadow: 0 10px 20px -5px rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; cursor: pointer; }
     .btn-main:active { transform: scale(0.98); }
     .btn-main:disabled { background: #ccc; cursor: not-allowed; box-shadow: none; }
-
     .option-card { border: 2px solid transparent; transition: all 0.2s; cursor: pointer; }
     .option-card.selected { border-color: #FDB813; background-color: #FFFDF5; }
     .option-card.selected i { color: #FDB813; }
-
     .toggle-btn { padding: 8px; border-radius: 8px; border: 1px solid #E5E7EB; text-align: center; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; }
     .toggle-btn.active { background-color: #FDB813; color: white; border-color: #FDB813; font-weight: 700; }
     .floor-btn { background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 10px 0; text-align: center; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all 0.2s; user-select: none; }
     .floor-btn.selected { background-color: #2A2A2A; color: white; border-color: #2A2A2A; font-weight: 700; transform: scale(1.05); }
 
-    /* 照片上傳區 */
+    /* 照片上傳 */
     .photo-scroll-container { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
     .photo-scroll-container::-webkit-scrollbar { display: none; }
     .add-photo-btn { flex-shrink: 0; width: 80px; height: 80px; border: 2px dashed #CBD5E1; border-radius: 12px; background: #F8FAFC; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: #94A3B8; transition: all 0.2s; }
@@ -188,7 +124,6 @@
     .toggle-icon { position: absolute; left: 20px; top: 50%; transform: translateY(-50%) rotate(0deg); transition: transform 0.3s; font-size: 16px; color: #5A6573; }
     .dynamic-card.active .toggle-icon { transform: translateY(-50%) rotate(90deg); }
     @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-
     .card-actions { position: absolute; top: 50%; right: 15px; transform: translateY(-50%); display: flex; gap: 8px; }
     .btn-card-action { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9CA3AF; transition: all 0.2s; background: rgba(255,255,255,0.8); border: 1px solid transparent; }
     .btn-card-action:hover { background: #FFF; border-color: #E5E7EB; color: #4B5563; }
@@ -200,38 +135,32 @@
     .item-card.active .item-header { background: #F9FAFB; border-bottom: 1px solid #E5E7EB; }
     .item-body { padding: 20px; background: #FFFFFF; display: none; }
     .item-body.active { display: block; animation: slideDown 0.2s ease-out; }
-
     .item-title-block { margin-bottom: 6px; }
     .item-name { font-size: 15px; font-weight: 700; color: #1F2937; margin-right: 4px; }
     .item-qty { font-size: 16px; font-weight: 800; color: #1F2937; } 
     .item-tags-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .tag-std { background-color: #FFFFFF; border: 1px solid #E5E7EB; color: #6B7280; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; display: inline-block; }
     .tag-highlight { background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; }
-
     .item-risk-bar { padding: 10px 14px; font-size: 12px; line-height: 1.5; font-weight: 700; display: flex; align-items: center; border-top: 1px solid rgba(0,0,0,0.05); }
     .risk-bg-red { background-color: #FEF2F2; color: #B91C1C; border-left: 4px solid #EF4444; } 
     .risk-bg-orange { background-color: #FFF7ED; color: #C2410C; border-left: 4px solid #F97316; } 
     .risk-bg-green { background-color: #F0FDF4; color: #15803D; border-left: 4px solid #22C55E; } 
-
     .item-arrow-icon { font-size: 14px; color: #9CA3AF; transition: transform 0.3s; margin-right: 10px; margin-top: 4px; }
     .item-card.active .item-arrow-icon { transform: rotate(90deg); color: #FDB813; }
     .item-actions { display: flex; gap: 6px; }
     .btn-icon-sm { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9CA3AF; transition: all 0.2s; background: #FFF; border: 1px solid #E5E7EB; }
     .btn-icon-sm:hover { background: #F3F4F6; color: #4B5563; }
     .btn-icon-sm.delete:hover { background: #FEE2E2; color: #EF4444; border-color: #FECACA; }
-
-    /* [按鈕 Loading 樣式] */
     .btn-loading { pointer-events: none; opacity: 0.8; cursor: wait; }
     .btn-loading i { animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* === 結果頁樣式 === */
+    /* 結果頁 & 指南樣式 */
     .result-total-card { text-align: center; border: 2px solid #FDB813; background: #FFFDF5; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
     .result-amount { font-size: 48px; font-weight: 800; color: #2A2A2A; margin: 10px 0; }
     .result-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-top: 15px; border-top: 1px solid #E5E7EB; }
     .result-summary-item label { font-size: 12px; color: #9CA3AF; display: block; margin-bottom: 2px; }
     .result-summary-item span { font-size: 16px; font-weight: 700; color: #2A2A2A; }
-
     .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #F3F4F6; font-size: 15px; }
     .breakdown-row:last-child { border-bottom: none; }
     .breakdown-label { font-weight: 700; color: #374151; }
@@ -249,287 +178,77 @@
     .reminder-item.check { color: #15803D; }
     .reminder-item.check::before { content: '✅'; position: absolute; left: 0; top: 1px; }
 
-    /* === [NEW] 指南頁面擴充樣式 === */
-    /* 時間軸樣式 */
+    /* 指南元素 */
     .timeline-container { position: relative; padding-left: 24px; border-left: 2px solid #E5E7EB; margin-left: 12px; margin-top: 20px; }
     .timeline-item { position: relative; margin-bottom: 30px; }
     .timeline-item:last-child { margin-bottom: 0; }
     .timeline-dot { position: absolute; left: -31px; top: 0; width: 16px; height: 16px; border-radius: 50%; background: #FFF; border: 3px solid #FDB813; z-index: 10; }
     .timeline-title { font-weight: 700; color: #2A2A2A; font-size: 16px; margin-bottom: 8px; }
     .timeline-content { background: #F9FAFB; border-radius: 12px; padding: 15px; border: 1px solid #F3F4F6; }
-      
-    /* 5W2H 標籤 */
     .tag-5w2h { display: inline-block; font-size: 10px; background: #2A2A2A; color: white; padding: 2px 6px; border-radius: 4px; margin-right: 5px; font-weight: bold; }
 
-    /* 約定條款區 */
     .terms-box { background: #FFFDF5; border: 1px solid #FDB813; padding: 20px; border-radius: 12px; font-size: 13px; line-height: 1.8; color: #4B5563; max-height: 1200px; overflow-y: auto; text-align: justify; }
     .terms-box h4 { color: #2A2A2A; font-weight: 700; margin-bottom: 10px; font-size: 15px; }
     .terms-box ol { list-style-type: decimal; padding-left: 20px; margin-bottom: 15px; }
     .terms-box li { margin-bottom: 8px; }
     .terms-highlight { background: #FCE7A2; padding: 0 4px; border-radius: 2px; font-weight: bold; color: #000; }
 
-    /* 簽名區 */
     .signature-area { background: white; border: 2px dashed #CBD5E1; border-radius: 12px; position: relative; height: 180px; width: 100%; margin-top: 10px; touch-action: none; }
     .signature-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #CBD5E1; pointer-events: none; font-size: 20px; font-weight: bold; }
     #signature-canvas { width: 100%; height: 100%; cursor: crosshair; }
 
-    /* === [NEW] 賈伯斯級指南樣式優化 === */
-
-    /* 1. 報價儀表板 (Dashboard) */
-    .quote-dashboard {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-    .quote-metric-card {
-        background: white;
-        border: 1px solid #E5E7EB;
-        border-radius: 16px;
-        padding: 15px;
-        text-align: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        transition: all 0.2s;
-    }
+    /* 指南與報價 */
+    .quote-dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+    .quote-metric-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; padding: 15px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: all 0.2s; }
     .quote-metric-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
     .quote-metric-label { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
     .quote-metric-value { font-size: 20px; font-weight: 800; color: #2A2A2A; }
-    .quote-metric-value.highlight { color: #D97706; font-size: 24px; } /* 總金額特別色 */
+    .quote-metric-value.highlight { color: #D97706; font-size: 24px; }
 
-    /* 2. 美化表格 (Table) */
-    .fancy-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
-    .fancy-table th { text-align: left; padding: 12px 15px; color: #6B7280; font-weight: 600; border-bottom: 2px solid #F3F4F6; font-size: 12px; }
-    .fancy-table td { padding: 12px 15px; border-bottom: 1px solid #F3F4F6; color: #374151; vertical-align: middle; }
-    .fancy-table tr:last-child td { border-bottom: none; }
-    .fancy-table tr:hover td { background-color: #F9FAFB; }
-    .fancy-table .amount-col { text-align: right; font-weight: 700; font-family: monospace; font-size: 15px; }
-    .fancy-table .icon-col { width: 30px; text-align: center; color: #9CA3AF; }
-
-    /* 3. 現代化時間軸 (Modern Timeline) */
     .modern-timeline { position: relative; padding-left: 0; }
-    .modern-timeline::before {
-        content: '';
-        position: absolute;
-        top: 15px;
-        bottom: 0;
-        left: 24px; /* 線條位置 */
-        width: 2px;
-        background: #E5E7EB;
-        z-index: 0;
-    }
-      
-    .timeline-phase {
-        position: relative;
-        margin-bottom: 40px;
-        z-index: 1;
-    }
-      
-    /* 階段標題球 */
-    .phase-badge {
-        display: flex;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-    .phase-dot {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        background: #2A2A2A;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 18px;
-        border: 4px solid #FFF;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        z-index: 2;
-        flex-shrink: 0;
-    }
-    .phase-content {
-        margin-left: 15px;
-    }
+    .modern-timeline::before { content: ''; position: absolute; top: 15px; bottom: 0; left: 24px; width: 2px; background: #E5E7EB; z-index: 0; }
+    .timeline-phase { position: relative; margin-bottom: 40px; z-index: 1; }
+    .phase-badge { display: flex; align-items: center; margin-bottom: 15px; }
+    .phase-dot { width: 50px; height: 50px; border-radius: 50%; background: #2A2A2A; color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; border: 4px solid #FFF; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 2; flex-shrink: 0; }
+    .phase-content { margin-left: 15px; }
     .phase-title { font-size: 18px; font-weight: 800; color: #111827; }
     .phase-desc { font-size: 13px; color: #6B7280; }
 
-    /* 任務卡片群組 */
-    .task-group {
-        margin-left: 25px; /* 對齊線條右側 */
-        padding-left: 25px;
-    }
-      
-    .task-card {
-        background: white;
-        border: 1px solid #F3F4F6;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        position: relative;
-        transition: transform 0.2s;
-    }
+    .task-group { margin-left: 25px; padding-left: 25px; }
+    .task-card { background: white; border: 1px solid #F3F4F6; border-radius: 12px; padding: 16px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative; transition: transform 0.2s; }
     .task-card:hover { transform: translateX(5px); border-color: #FDB813; }
-      
-    /* 連接線的小圓點 */
-    .task-card::before {
-        content: '';
-        position: absolute;
-        left: -30px; /* 連到主線 */
-        top: 24px;
-        width: 10px;
-        height: 10px;
-        background: white;
-        border: 2px solid #D1D5DB;
-        border-radius: 50%;
-        z-index: 2;
-    }
+    .task-card::before { content: ''; position: absolute; left: -30px; top: 24px; width: 10px; height: 10px; background: white; border: 2px solid #D1D5DB; border-radius: 50%; z-index: 2; }
     .task-card.checked::before { background: #10B981; border-color: #10B981; }
-
-    /* 任務標題與勾選 */
     .task-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
-    .checkbox-custom {
-        width: 22px;
-        height: 22px;
-        border: 2px solid #D1D5DB;
-        border-radius: 6px;
-        flex-shrink: 0;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        transition: all 0.2s;
-    }
+    .checkbox-custom { width: 22px; height: 22px; border: 2px solid #D1D5DB; border-radius: 6px; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; transition: all 0.2s; }
     .checkbox-custom.checked { background: #10B981; border-color: #10B981; }
-      
     .task-title { font-weight: 700; color: #374151; font-size: 15px; line-height: 1.4; flex: 1; }
-    .task-5w2h-box {
-        background: #F9FAFB;
-        border-radius: 8px;
-        padding: 10px 12px;
-        font-size: 13px;
-        color: #4B5563;
-        margin-top: 8px;
-        margin-left: 34px; /* 對齊文字 */
-        border-left: 3px solid #FDB813;
-        line-height: 1.6;
-    }
+    .task-5w2h-box { background: #F9FAFB; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #4B5563; margin-top: 8px; margin-left: 34px; border-left: 3px solid #FDB813; line-height: 1.6; }
     .highlight-label { font-weight: 700; color: #111827; margin-right: 4px; }
 
-    /* 手機版適配 */
     @media (max-width: 480px) {
         .quote-dashboard { grid-template-columns: 1fr; gap: 10px; }
         .phase-dot { width: 40px; height: 40px; font-size: 16px; }
         .modern-timeline::before { left: 19px; }
     }
 
+    .step-5-readonly .card:last-child { display: none; }
+    .step-5-readonly #btn-next, .step-5-readonly #btn-prev { display: none; }
 
-    /* === [NEW] 物品清單與 SOP 表格樣式 === */
-      
-    /* 物品清單表格 */
-    .inventory-table { width: 100%; font-size: 13px; border-collapse: separate; border-spacing: 0; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
-    .inventory-table th { background: #F3F4F6; color: #4B5563; font-weight: 700; padding: 10px; text-align: left; border-bottom: 1px solid #E5E7EB; }
-    .inventory-table td { padding: 10px; border-bottom: 1px solid #F3F4F6; color: #1F2937; vertical-align: top; }
-    .inventory-table tr:last-child td { border-bottom: none; }
-    .inventory-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; margin-bottom: 2px; font-weight: 500; }
-    .tag-risk { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
-    .tag-cate { background: #F0F9FF; color: #0369A1; border: 1px solid #BAE6FD; }
-
-    /* SOP 每日計畫表 */
-    .sop-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    .sop-table th { background: #2A2A2A; color: white; padding: 12px; text-align: left; font-size: 14px; }
-    .sop-table td { border: 1px solid #E5E7EB; padding: 12px; font-size: 14px; vertical-align: top; }
-    .sop-time { font-weight: 700; color: #D97706; white-space: nowrap; }
-    .sop-action { font-weight: 700; color: #111827; display: block; margin-bottom: 4px; }
-    .sop-detail { font-size: 13px; color: #6B7280; line-height: 1.5; }
-    .sop-check { width: 30px; text-align: center; }
-
-    /* Step 6 特殊樣式：隱藏 Step 5 的操作區 */
-    .step-5-readonly .card:last-child { display: none; } /* 假設最後一個 card 是備註下面的按鈕區，若不是請用 id 控制 */
-    .step-5-readonly #btn-next, .step-5-readonly #btn-prev { display: none; } /* 隱藏 footer */
-
-
-/* =========================================
-   [列印專用樣式] 1:1 原樣輸出 (按 Ctrl+P 時生效)
-   ========================================= */
-@media print {
-    /* 1. 隱藏不該出現的 UI */
-    button, 
-    header, 
-    footer, 
-    #step-6-footer, 
-    .add-photo-btn, 
-    .btn-delete-img, 
-    .fixed, 
-    #progress-bar,
-    .no-print {
-        display: none !important;
+    /* 列印樣式 */
+    @media print {
+        button, header, footer, #step-6-footer, .add-photo-btn, .btn-delete-img, .fixed, #progress-bar, .no-print { display: none !important; }
+        body, .container, .main-content { width: 100% !important; margin: 0 !important; padding: 0 !important; background: white !important; color: black !important; overflow: visible !important; }
+        .step-section, .card-body, .item-body { display: block !important; opacity: 1 !important; height: auto !important; visibility: visible !important; overflow: visible !important; max-height: none !important; }
+        .card-collapsed-info { display: none !important; }
+        .terms-box, #guide-content { max-height: none !important; overflow: visible !important; border: none !important; }
+        input, textarea, select { border: none !important; background: transparent !important; resize: none !important; padding: 0 !important; font-weight: bold !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
+        select::-ms-expand { display: none; }
+        .card, .step-section, h3, h4 { break-inside: avoid; page-break-inside: avoid; }
+        .swal2-container { display: none !important; }
     }
-
-    /* 2. 重置容器寬度，確保滿版 */
-    body, .container, .main-content {
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: white !important;
-        color: black !important;
-        overflow: visible !important;
-    }
-
-    /* 3. 強制展開所有步驟與卡片 */
-    .step-section, 
-    .card-body, 
-    .item-body {
-        display: block !important;
-        opacity: 1 !important;
-        height: auto !important;
-        visibility: visible !important;
-        overflow: visible !important;
-        max-height: none !important;
-    }
-
-    /* 4. 隱藏「收合時」的提示文字 */
-    .card-collapsed-info {
-        display: none !important;
-    }
-
-    /* 5. 展開長捲軸內容 (條款、指南) */
-    .terms-box, 
-    #guide-content {
-        max-height: none !important;
-        overflow: visible !important;
-        border: none !important; /* 列印時去除邊框比較好看 */
-    }
-
-    /* 6. 輸入框優化 (移除邊框，看起來像純文字) */
-    input, textarea, select {
-        border: none !important;
-        background: transparent !important;
-        resize: none !important;
-        padding: 0 !important;
-        font-weight: bold !important;
-        color: #000 !important;
-        -webkit-appearance: none;
-        appearance: none;
-    }
-    
-    /* 隱藏下拉選單的小箭頭 */
-    select::-ms-expand { display: none; }
-    
-    /* 7. 確保分頁不斷在奇怪的地方 (如標題) */
-    .card, .step-section, h3, h4 {
-        break-inside: avoid;
-        page-break-inside: avoid;
-    }
-    
-    /* 8. SweetAlert 隱藏 */
-    .swal2-container { display: none !important; }
-}
 </style>
-
-
 </head>
-
 
 <body class="min-h-screen flex flex-col pb-28">
 
@@ -551,12 +270,12 @@
             <div><label class="block text-sm font-bold text-gray-700 mb-2">2. Email </label><input type="email" id="input-email" class="input-field" placeholder="name@example.com"></div>
             
             <div class="bg-yellow-50 p-3 rounded-xl border border-yellow-200">
-   <label class="block text-sm font-bold text-gray-700 mb-2">3. 推薦人/會員代碼 (必填)</label>
-   <p class="text-xs text-gray-500 mb-2">請輸入您或推薦人的專屬會員代碼以啟用服務。</p>
-   <div class="flex gap-2">
-      <input type="text" id="input-referrer" class="input-field" placeholder="請輸入會員代碼">
-   </div>
-</div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">3. 推薦人/會員代碼 (必填)</label>
+                <p class="text-xs text-gray-500 mb-2">請輸入您或推薦人的專屬會員代碼以啟用服務。</p>
+                <div class="flex gap-2">
+                    <input type="text" id="input-referrer" class="input-field" placeholder="請輸入會員代碼">
+                </div>
+            </div>
 
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-3">4. 這次需要搬什麼？</label>
@@ -745,22 +464,21 @@
                 </div>
             </div>
 
+            <div id="step-6-footer" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-50 flex flex-col gap-3 max-w-md mx-auto no-print">
+                <div id="action-buttons" class="flex gap-3">
+                    <button onclick="prevStep()" class="w-1/3 py-3 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 text-sm shadow-sm">
+                        <i class="fas fa-edit"></i> 上一步修改
+                    </button>
+                    <button id="btn-book-now" onclick="handleBooking()" class="flex-1 py-3 bg-brand-dark text-white rounded-xl font-bold hover:bg-gray-800 text-sm shadow-lg flex items-center justify-center gap-2">
+                        <i class="fas fa-paper-plane"></i> 確認預約並發送資料
+                    </button>
+                </div>
 
-<div id="step-6-footer" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-50 flex flex-col gap-3 max-w-md mx-auto no-print">
-    <div id="action-buttons" class="flex gap-3">
-        <button onclick="prevStep()" class="w-1/3 py-3 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 text-sm shadow-sm">
-            <i class="fas fa-edit"></i> 上一步修改
-        </button>
-        <button id="btn-book-now" onclick="handleBooking()" class="flex-1 py-3 bg-brand-dark text-white rounded-xl font-bold hover:bg-gray-800 text-sm shadow-lg flex items-center justify-center gap-2">
-            <i class="fas fa-paper-plane"></i> 確認預約並發送資料
-        </button>
+                <a id="btn-line-connect" href="https://line.me/R/ti/p/@movingbetter" target="_blank" class="hidden w-full py-4 bg-[#06C755] text-white rounded-xl font-bold hover:bg-[#05b64d] text-base shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 animate-pulse">
+                    <i class="fab fa-line text-2xl"></i> 資料已傳送！點此前往 LINE 官方帳號
+                </a>
+            </div>
     </div>
-
-    <a id="btn-line-connect" href="https://line.me/R/ti/p/@movingbetter" target="_blank" class="hidden w-full py-4 bg-[#06C755] text-white rounded-xl font-bold hover:bg-[#05b64d] text-base shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 animate-pulse">
-        <i class="fab fa-line text-2xl"></i> 資料已傳送！點此前往 LINE 官方帳號
-    </a>
-</div>
-
   </main>
 
   <footer id="main-footer" class="fixed bottom-0 left-0 right-0 p-5 bg-white/95 backdrop-blur border-t border-gray-100 z-50 shadow-lg">
@@ -1043,10 +761,10 @@
          </div>
     </div>
   </template>
-</body>
-  <script>
+
+<script>
     // ==========================================
-    // 0. [核心] SweetAlert2 輔助函式 (解決 Google Sites 彈窗封鎖)
+    // 0. [核心] SweetAlert2 輔助函式
     // ==========================================
     
     // 顯示訊息 (取代 alert)
@@ -1058,11 +776,10 @@
                 icon: icon,
                 confirmButtonColor: '#FDB813',
                 confirmButtonText: '知道了',
-                heightAuto: false // 避免在 iframe 中跑版
+                heightAuto: false
             });
         } else {
             console.log(`[${icon}] ${title}: ${text}`);
-            // Fallback
             const msg = document.createElement('div');
             msg.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:9999;text-align:center;";
             msg.innerHTML = `<strong>${title}</strong><br>${text}`;
@@ -1071,7 +788,7 @@
         }
     }
 
-    // 顯示確認框 (取代 confirm) - 回傳 Promise<boolean>
+    // 顯示確認框 (取代 confirm)
     async function showConfirm(title, text = '') {
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
@@ -1086,10 +803,8 @@
                 heightAuto: false
             });
             return result.isConfirmed;
-        } else {
-            // 在無法載入 Swal 的極端情況下，預設回傳 true 以免流程卡死
-            return true; 
         }
+        return true; 
     }
 
     // ==========================================
@@ -1101,8 +816,6 @@
     let cardImages = {}; 
     let locationOptions = { out: [], in: [] }; 
     let areaFilesStore = new Map();
-
-    // 簽名板變數
     let signaturePad = { canvas: null, ctx: null, isDrawing: false };
 
     // 台灣行政區資料
@@ -1135,15 +848,11 @@
       const dateInput = document.getElementById('input-date');
       if(dateInput) dateInput.min = new Date().toISOString().split('T')[0];
       loadFromStorage();
-      
-      // 初始化預設卡片
       addLocation('out'); addLocation('in');
       addPackingArea(); addAreaCard();
     });
 
-    // ==========================================
     // 2. 頁面導航與驗證
-    // ==========================================
     function nextStep() { 
         if (currentStep === 0) { 
             const name = document.getElementById('input-name').value; 
@@ -1157,20 +866,14 @@
 
             const btnNext = document.getElementById('btn-next');
             const originalText = document.getElementById('btn-text-main').innerText;
-            
             setBtnLoading(btnNext, true);
             
-            // 呼叫 GAS (轉接器會自動補上 action: 'checkReferrerCode')
             google.script.run
                 .withSuccessHandler(isValid => {
                     setBtnLoading(btnNext, false);
                     document.getElementById('btn-text-main').innerText = originalText;
-                    
-                    if (isValid) {
-                        proceedToStep1(name, email, date, type, referrer);
-                    } else {
-                        showMsg('會員代碼無效', '此代碼不在我們的會員名冊中，請確認後再試。', 'error');
-                    }
+                    if (isValid) proceedToStep1(name, email, date, type, referrer);
+                    else showMsg('會員代碼無效', '此代碼不在我們的會員名冊中，請確認後再試。', 'error');
                 })
                 .withFailureHandler(err => {
                     setBtnLoading(btnNext, false);
@@ -1178,7 +881,6 @@
                     showMsg('連線錯誤', '連線檢查失敗，請稍後再試。', 'error');
                 })
                 .checkReferrerCode(referrer); 
-
             return; 
         } 
         else if (currentStep === 1) { 
@@ -1186,89 +888,47 @@
             const outs = userData.locations.filter(l => l.type === 'out'); 
             const ins = userData.locations.filter(l => l.type === 'in'); 
             if(outs.length === 0 || ins.length === 0) return showMsg('地點不足', '請至少設定一個搬出地與一個搬入地', 'warning'); 
-            
-            autoSaveProgress(1); 
-            updateLocationOptions(userData.locations); 
-            updateStep3Dropdowns(); 
-            goToStep(2); 
+            autoSaveProgress(1); updateLocationOptions(userData.locations); updateStep3Dropdowns(); goToStep(2); 
         } else if (currentStep === 2) { 
-            calcStep2Total(); 
-            autoSaveProgress(2); 
-            goToStep(3); 
+            calcStep2Total(); autoSaveProgress(2); goToStep(3); 
         } else if (currentStep === 3) { 
             const areas = document.querySelectorAll('.area-card'); 
             if(areas.length === 0) return showMsg('區域不足', '請至少新增一個區域 (如：臥室)', 'warning'); 
-            
-            autoSaveProgress(3); 
-            goToStep(4); 
+            autoSaveProgress(3); goToStep(4); 
         } else if (currentStep === 4) {
             const btn = document.querySelector('#step-4 .btn-main');
             handleSubmitEstimation(btn);
         } else if (currentStep === 5) {
             document.getElementById('main-footer').style.display = 'none';
-            goToStep(6); 
-            generateGuide(); 
-            setTimeout(initSignaturePad, 500);
+            goToStep(6); generateGuide(); setTimeout(initSignaturePad, 500);
         }
     }
 
     function proceedToStep1(name, email, date, type, referrer) {
         let urgency = "normal"; 
         if (date) { const d = getDiffDays(date); if(d<3) urgency="critical"; else if(d<7) urgency="urgent"; } 
-        
         userData.basic = { name, email, date, type, referrer, urgency }; 
         localStorage.setItem('ayue_user_info', JSON.stringify(userData.basic)); 
-        
-        autoSaveProgress(0); 
-        goToStep(1); 
+        autoSaveProgress(0); goToStep(1); 
     }
 
     function prevStep() { 
-        if (currentStep === 6) {
-             document.getElementById('main-footer').style.display = 'block';
-             goToStep(5);
-             return;
-        }
+        if (currentStep === 6) { document.getElementById('main-footer').style.display = 'block'; goToStep(5); return; }
         if(currentStep > 0) goToStep(currentStep - 1); 
     }
       
     function goToStep(step) { 
         const targetEl = document.getElementById(`step-${step}`);
-        if (targetEl) {
-            targetEl.classList.add('active'); 
-            targetEl.style.display = 'block';
-            setTimeout(() => {
-                targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        }
-        
+        if (targetEl) { targetEl.classList.add('active'); targetEl.style.display = 'block'; setTimeout(() => targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }
         currentStep = step; 
-        
-        if (currentStep === 6) {
-            const step5 = document.getElementById('step-5');
-            if (step5) {
-                step5.classList.add('active', 'step-5-readonly');
-                step5.style.display = 'block';
-            }
-            const footer = document.getElementById('main-footer');
-            if(footer) footer.style.display = 'none';
-        } else {
-            const step5 = document.getElementById('step-5');
-            if(step5) step5.classList.remove('step-5-readonly');
-            const footer = document.getElementById('main-footer');
-            if(footer) footer.style.display = 'block';
-        }
-        
-        const progressBar = document.getElementById('progress-bar');
-        if(progressBar) progressBar.style.width = Math.min((step + 1) * 16.6, 100) + '%'; 
-        
-        const btnPrev = document.getElementById('btn-prev');
-        if(btnPrev) btnPrev.classList.toggle('hidden', step === 0); 
-        
+        const step5 = document.getElementById('step-5');
+        const footer = document.getElementById('main-footer');
+        if (currentStep === 6) { if(step5) { step5.classList.add('active', 'step-5-readonly'); step5.style.display = 'block'; } if(footer) footer.style.display = 'none'; } 
+        else { if(step5) step5.classList.remove('step-5-readonly'); if(footer) footer.style.display = 'block'; }
+        document.getElementById('progress-bar').style.width = Math.min((step + 1) * 16.6, 100) + '%'; 
+        document.getElementById('btn-prev').classList.toggle('hidden', step === 0); 
         const titles = ["基本資訊", "地點與動線", "整理與打包", "搬運物件", "備註與結算", "估價結果", "搬家指南"]; 
-        const pageTitle = document.getElementById('page-title');
-        if(pageTitle && titles[step]) pageTitle.innerText = titles[step]; 
-        
+        document.getElementById('page-title').innerText = titles[step] || ""; 
         updateBtnText();
     }
 
@@ -1276,51 +936,33 @@
         const btnMain = document.getElementById('btn-text-main');
         const btnSub = document.getElementById('btn-text-sub');
         if (!btnMain) return;
-        
         if (currentStep === 0) { btnMain.innerText='GO'; btnSub.innerText='下一步：地點與動線'; }
         else if (currentStep === 1) { btnMain.innerText='GO'; btnSub.innerText='下一步：打包整理'; }
         else if (currentStep === 2) { btnMain.innerText='GO'; btnSub.innerText='下一步：搬運物件'; }
         else if (currentStep === 3) { btnMain.innerText='GO'; btnSub.innerText='下一步：備註結算'; }
         else if (currentStep === 4) { btnMain.innerText='產生估價單'; btnSub.innerText='計算費用明細'; }
-        else if (currentStep === 5) { 
-            btnMain.innerText = '下一步：產出規劃指南'; 
-            btnSub.innerText = ''; 
-        }
+        else if (currentStep === 5) { btnMain.innerText = '下一步：產出規劃指南'; btnSub.innerText = ''; }
     }
 
-    // ==========================================
-    // 3. 核心邏輯 (Core Logic)
-    // ==========================================
-
+    // 3. 核心邏輯
     function handleSubmitEstimation(btnElement) {
         if (btnElement) setBtnLoading(btnElement, true);
-
-        const locMap = new Map();
-        userData.locations.forEach(l => locMap.set(l.id, l));
-
+        const locMap = new Map(); userData.locations.forEach(l => locMap.set(l.id, l));
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
             const outLocId = card.querySelector('.area-move-out-select').value;
             const inLocId = card.querySelector('.area-move-in-select').value;
             let rawOutFloor = card.querySelector('.area-out-floor-select').value;
             let rawInFloor = card.querySelector('.area-in-floor-select').value;
-
             if (locMap.get(outLocId)?.hasElevator) rawOutFloor = 'E' + rawOutFloor;
             if (locMap.get(inLocId)?.hasElevator) rawInFloor = 'E' + rawInFloor;
-
             return {
                 name: card.querySelector('.area-name-input').value,
-                moveOutFloor: rawOutFloor,
-                moveInFloor: rawInFloor,
+                moveOutFloor: rawOutFloor, moveInFloor: rawInFloor,
                 items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
-                    name: row.querySelector('.inp-name').value,
-                    qty: row.querySelector('.inp-qty').value,
-                    type: row.querySelector('.inp-type').value,
-                    material: row.querySelector('.inp-material').value,
-                    difficulty: row.querySelector('.inp-difficulty').value,
-                    disassembly: row.querySelector('.inp-disassembly').value,
-                    riskNote: row.querySelector('.inp-risknote').value,
-                    moveOutFloor: rawOutFloor, 
-                    moveInFloor: rawInFloor
+                    name: row.querySelector('.inp-name').value, qty: row.querySelector('.inp-qty').value,
+                    type: row.querySelector('.inp-type').value, material: row.querySelector('.inp-material').value,
+                    difficulty: row.querySelector('.inp-difficulty').value, disassembly: row.querySelector('.inp-disassembly').value,
+                    riskNote: row.querySelector('.inp-risknote').value, moveOutFloor: rawOutFloor, moveInFloor: rawInFloor
                 }))
             };
         });
@@ -1331,24 +973,11 @@
 
         const requestData = {
             locations: [
-                ...userData.locations.filter(l => l.type === 'out').map(l => ({ 
-                    ...l, type: 'move-out', address: l.addr,
-                    specialStairs: l.stairsCount, specialDistance: l.pushUnits, 
-                    specialTransfer: l.transferCount, specialCrane: l.craneHours 
-                })),
-                ...userData.locations.filter(l => l.type === 'in').map(l => ({ 
-                    ...l, type: 'move-in', address: l.addr,
-                    specialStairs: l.stairsCount, specialDistance: l.pushUnits, 
-                    specialTransfer: l.transferCount, specialCrane: l.craneHours 
-                }))
+                ...userData.locations.filter(l => l.type === 'out').map(l => ({ ...l, type: 'move-out', address: l.addr, specialStairs: l.stairsCount, specialDistance: l.pushUnits, specialTransfer: l.transferCount, specialCrane: l.craneHours })),
+                ...userData.locations.filter(l => l.type === 'in').map(l => ({ ...l, type: 'move-in', address: l.addr, specialStairs: l.stairsCount, specialDistance: l.pushUnits, specialTransfer: l.transferCount, specialCrane: l.craneHours }))
             ],
             areas: areasData,
-            services: {
-                packingBoxes: buyBoxesVal, 
-                bubbleWrap: buyBubbleVal,
-                preMovePacking: document.getElementById('service-pack').checked ? aiTotalBoxes : 0,
-                postMoveUnpacking: document.getElementById('service-unpack').checked ? aiTotalBoxes : 0
-            },
+            services: { packingBoxes: buyBoxesVal, bubbleWrap: buyBubbleVal, preMovePacking: document.getElementById('service-pack').checked ? aiTotalBoxes : 0, postMoveUnpacking: document.getElementById('service-unpack').checked ? aiTotalBoxes : 0 },
             specialNotes: document.getElementById('final-special-notes').value
         };
 
@@ -1358,21 +987,14 @@
                 userData.quoteResult = res; 
                 if (res.error) return showMsg('後端錯誤', res.error, 'error');
                 showEstimationResult(res, requestData);
-
-                setTimeout(() => {
-                    autoSaveProgress(5); 
-                }, 500);
+                setTimeout(() => autoSaveProgress(5), 500);
             })
-            .withFailureHandler(err => {
-                showMsg('發生錯誤', err, 'error');
-                if (btnElement) setBtnLoading(btnElement, false);
-            })
+            .withFailureHandler(err => { showMsg('發生錯誤', err, 'error'); if (btnElement) setBtnLoading(btnElement, false); })
             .calculateFullQuote(requestData, null);
     }
 
     function showEstimationResult(res, request) {
         document.getElementById('main-footer').style.display = 'block'; 
-        
         document.getElementById('result-total-fee').innerText = `$ ${res.totalFee.toLocaleString()}`;
         document.getElementById('result-trucks').innerText = `${res.baseTrucks} 台3.5噸貨車`;
         document.getElementById('result-manpower').innerText = `${res.baseManpower}~${res.baseManpower+1} 位搬運師`;
@@ -1411,26 +1033,15 @@
 
         document.getElementById('result-view-notes').innerText = res.specialNotes || "(無)";
         renderReminders(res, request);
-
         goToStep(5);
     }
 
     function renderReminders(res, req) {
         const container = document.getElementById('reminder-content');
         let html = '<div class="space-y-4">'; 
-
-        if (res.itemCounts["特殊技法搬"] > 0) {
-            html += `<div class="bg-red-50 border-l-4 border-red-500 p-3 rounded-r"><h4 class="font-bold text-red-700 mb-1 flex items-center"><i class="fas fa-exclamation-circle mr-2"></i>特殊貴重物品提醒</h4><ul class="text-sm text-red-800 space-y-1 list-none"><li class="pl-4 relative before:content-['•'] before:absolute before:left-0 font-bold">本單包含「特殊技法」搬運物件，強烈建議您<strong>額外加保商業保險</strong>。</li><li class="pl-4 relative before:content-['•'] before:absolute before:left-0">請確認路徑寬度與地面承重。</li></ul></div>`;
-        }
-        if (res.itemCounts["一人技術搬"] > 0 || res.itemCounts["二人技術搬"] > 0) {
-            html += `<div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r"><h4 class="font-bold text-blue-700 mb-1 flex items-center"><i class="fas fa-shield-alt mr-2"></i>精緻物品防護</h4><ul class="text-sm text-blue-800 space-y-1 list-none"><li class="pl-4 relative before:content-['•'] before:absolute before:left-0">我們會使用毯子或膠膜加強防護。</li><li class="pl-4 relative before:content-['•'] before:absolute before:left-0 font-bold text-orange-700">玻璃層板或活動抽屜請務必取出或固定。</li></ul></div>`;
-        }
-
-        let hasNoElevatorHighFloor = false;
-        let hasCrane = false;
-        let hasAlley = false;
-        let hasTransfer = false;
+        if (res.itemCounts["特殊技法搬"] > 0) html += `<div class="bg-red-50 border-l-4 border-red-500 p-3 rounded-r"><h4 class="font-bold text-red-700 mb-1 flex items-center"><i class="fas fa-exclamation-circle mr-2"></i>特殊貴重物品提醒</h4><ul class="text-sm text-red-800 space-y-1 list-none"><li class="pl-4 relative before:content-['•'] before:absolute before:left-0 font-bold">本單包含「特殊技法」搬運物件，強烈建議您<strong>額外加保商業保險</strong>。</li></ul></div>`;
         
+        let hasNoElevatorHighFloor = false, hasCrane = false, hasAlley = false, hasTransfer = false;
         req.locations.forEach(loc => {
             if (loc.floorType === 'no' && (loc.floors && loc.floors.some(f => parseInt(f.replace(/[B,F]/g,'')) >= 4))) hasNoElevatorHighFloor = true;
             if (parseInt(loc.specialCrane) > 0) hasCrane = true;
@@ -1439,89 +1050,47 @@
         });
 
         let routeHtml = '';
-        if (hasCrane) routeHtml += `<li class="text-red-600 font-bold">🛑 使用吊車：請確認陽台鐵窗可拆卸、樓下有停車空間及路權。</li>`;
+        if (hasCrane) routeHtml += `<li class="text-red-600 font-bold">🛑 使用吊車：請確認陽台鐵窗可拆卸。</li>`;
         if (hasNoElevatorHighFloor) routeHtml += `<li class="text-orange-600 font-bold">⚠️ 高樓層無電梯：請確認樓梯間淨空。</li>`;
         if (hasAlley) routeHtml += `<li class="text-red-600 font-bold">🛑 巷弄確認：請確認3.5噸貨車能否駛入。</li>`;
-        if (hasTransfer) routeHtml += `<li class="text-blue-600">💡 電梯轉乘：請事先預約貨梯。</li>`;
-        if (!hasAlley) routeHtml += `<li class="text-green-700 font-medium">✅ 請協助預留貨車停靠位置。</li>`;
-
-        if (routeHtml) {
-            html += `<div class="bg-gray-50 border-l-4 border-gray-500 p-3 rounded-r"><h4 class="font-bold text-gray-700 mb-1 flex items-center"><i class="fas fa-truck mr-2"></i>動線與停靠確認</h4><ul class="text-sm space-y-1 pl-4 list-disc text-gray-600">${routeHtml}</ul></div>`;
-        }
-
-        let hasPackingService = (parseInt(req.services.preMovePacking) > 0 || parseInt(req.services.postMoveUnpacking) > 0);
-        let hasDisassembly = (Object.values(res.disassemblyItemCounts).reduce((a,b)=>a+b,0) > 0);
-
-        let serviceHtml = '';
-        if (hasDisassembly) serviceHtml += `<li class="text-orange-600 font-bold">⚠️ 拆裝傢俱：請清空衣櫃、床組內物品。</li>`;
-        if (hasPackingService) serviceHtml += `<li class="text-blue-600">💡 代客打包：貴重物品請隨身攜帶。</li>`;
-        
-        if (serviceHtml) {
-            html += `<div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-r"><h4 class="font-bold text-yellow-700 mb-1 flex items-center"><i class="fas fa-tools mr-2"></i>拆裝與服務提醒</h4><ul class="text-sm space-y-1 pl-4 list-disc">${serviceHtml}</ul></div>`;
-        }
-
-        if (!hasPackingService) {
-            html += `<div class="bg-green-50 border-l-4 border-green-500 p-3 rounded-r"><h4 class="font-bold text-green-700 mb-1 flex items-center"><i class="fas fa-box mr-2"></i>自行打包小撇步</h4><ul class="text-sm text-green-800 space-y-1 pl-4 list-disc"><li>書籍請用小箱，衣物可用大箱。</li><li>易碎品請直立擺放並塞滿緩衝。</li></ul></div>`;
-        }
-
+        if (routeHtml) html += `<div class="bg-gray-50 border-l-4 border-gray-500 p-3 rounded-r"><h4 class="font-bold text-gray-700 mb-1 flex items-center"><i class="fas fa-truck mr-2"></i>動線確認</h4><ul class="text-sm space-y-1 pl-4 list-disc text-gray-600">${routeHtml}</ul></div>`;
         html += '</div>';
         container.innerHTML = html;
     }
 
-    // --- Step 5 -> 6 指南生成 (資料抓取強化版) ---
+    // Step 5 -> 6 指南生成
     function generateGuide() {
         const loadingEl = document.getElementById('guide-loading');
         const contentEl = document.getElementById('guide-content');
-        
         loadingEl.classList.remove('hidden');
         contentEl.innerHTML = ''; 
 
-        // 1. 收集 Step 3 (區域家具) 資料
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
             return {
                  name: card.querySelector('.area-name-input').value,
-                 floorOut: card.querySelector('.area-out-floor-select').value,
-                 floorIn: card.querySelector('.area-in-floor-select').value,
+                 floorOut: card.querySelector('.area-out-floor-select').value, floorIn: card.querySelector('.area-in-floor-select').value,
                  items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
-                    name: row.querySelector('.inp-name').value,
-                    qty: row.querySelector('.inp-qty').value,
-                    type: row.querySelector('.inp-type').value,
-                    material: row.querySelector('.inp-material').value, 
-                    difficulty: row.querySelector('.inp-difficulty').value, 
-                    disassembly: row.querySelector('.inp-disassembly').value, 
-                    risk: row.querySelector('.inp-risknote').value
+                    name: row.querySelector('.inp-name').value, qty: row.querySelector('.inp-qty').value,
+                    type: row.querySelector('.inp-type').value, material: row.querySelector('.inp-material').value, 
+                    difficulty: row.querySelector('.inp-difficulty').value, disassembly: row.querySelector('.inp-disassembly').value, risk: row.querySelector('.inp-risknote').value
                  }))
             };
         });
 
-        // 2. 收集 Step 2 (打包區域) 資料
         const packingData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
             return {
                 name: card.querySelector('.area-name-input').value || '打包區域',
                 items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
-                    name: row.querySelector('.item-name').innerText, 
-                    qty: row.querySelector('.val-qty').value,
-                    tags: row.querySelector('.item-tags-detail')?.innerText || '',
-                    risk: row.querySelector('.item-risk-text')?.innerText || ''
+                    name: row.querySelector('.item-name').innerText, qty: row.querySelector('.val-qty').value,
+                    tags: row.querySelector('.item-tags-detail')?.innerText || '', risk: row.querySelector('.item-risk-text')?.innerText || ''
                 }))
             };
         });
 
-        // 準備完整請求資料
         const fullData = {
-            basic: userData.basic, 
-            locations: userData.locations, 
-            packing: userData.packing,      
-            packingDetails: packingData, 
-            services: {
-                preMovePacking: document.getElementById('service-pack').checked,
-                postMoveUnpacking: document.getElementById('service-unpack').checked,
-                packingBoxes: document.getElementById('material-box').value || 0,
-                bubbleWrap: document.getElementById('material-bubble').value || 0
-            },
-            areas: areasData, 
-            specialNotes: document.getElementById('final-special-notes').value, 
-            quoteResult: userData.quoteResult 
+            basic: userData.basic, locations: userData.locations, packing: userData.packing, packingDetails: packingData, 
+            services: { preMovePacking: document.getElementById('service-pack').checked, postMoveUnpacking: document.getElementById('service-unpack').checked, packingBoxes: document.getElementById('material-box').value || 0, bubbleWrap: document.getElementById('material-bubble').value || 0 },
+            areas: areasData, specialNotes: document.getElementById('final-special-notes').value, quoteResult: userData.quoteResult 
         };
 
         if (!fullData.quoteResult) {
@@ -1534,96 +1103,47 @@
         google.script.run
             .withSuccessHandler(res => {
                 loadingEl.classList.add('hidden');
-                if (res.error) {
-                    contentEl.innerHTML = `<div class="text-center text-red-500 py-10">指南生成失敗：${res.error}</div>`;
-                } else {
+                if (res.error) contentEl.innerHTML = `<div class="text-center text-red-500 py-10">指南生成失敗：${res.error}</div>`;
+                else {
                     let cleanHtml = res.html.replace(/```html/g, '').replace(/```/g, '').trim();
                     contentEl.innerHTML = cleanHtml;
-                    
                     setTimeout(initSignaturePad, 500);
-
                     autoSaveProgress(6, { guideHtml: cleanHtml });
                 }
             })
-            .withFailureHandler(err => {
-                loadingEl.classList.add('hidden');
-                showMsg('連線錯誤', err, 'error');
-            })
+            .withFailureHandler(err => { loadingEl.classList.add('hidden'); showMsg('連線錯誤', err, 'error'); })
             .generateMovingGuide(fullData); 
     }
 
-    // ==========================================
     // 4. 自動儲存進度
-    // ==========================================
     function autoSaveProgress(currentStepIndex, extraData = {}) {
         const basicInfo = JSON.parse(localStorage.getItem('ayue_user_info') || '{}');
         if (!basicInfo.email) return;
 
-        const step1Text = formatStep1ToText();
-        const step2Text = formatStep2ToText();
-        const step3Text = formatStep3ToText();
-        const step5Text = formatStep5ToText();
-        
-        let step6Text = "";
-        if (extraData.guideHtml) {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = extraData.guideHtml;
-            step6Text = formatDomToText(tempDiv);
-        } else {
-            step6Text = formatStep6ToText();
-        }
+        const step1Text = formatStep1ToText(); const step2Text = formatStep2ToText(); const step3Text = formatStep3ToText(); const step5Text = formatStep5ToText();
+        let step6Text = extraData.guideHtml ? formatDomToText(document.createElement('div').innerHTML = extraData.guideHtml) : formatStep6ToText();
 
         const payload = {
-            email: basicInfo.email,
-            name: basicInfo.name,
-            type: basicInfo.type,
-            moveDate: basicInfo.date,
-            referrer: basicInfo.referrer,
-            currentStep: "Step " + currentStepIndex,
-            step1: step1Text,
-            step2: step2Text,
-            step3: step3Text,
-            notes: document.getElementById('final-special-notes')?.value || "",
-            totalPrice: step5Text, 
-            guideContent: step6Text, 
-            isSent: extraData.isSent || "否"
+            email: basicInfo.email, name: basicInfo.name, type: basicInfo.type, moveDate: basicInfo.date, referrer: basicInfo.referrer,
+            currentStep: "Step " + currentStepIndex, step1: step1Text, step2: step2Text, step3: step3Text,
+            notes: document.getElementById('final-special-notes')?.value || "", totalPrice: step5Text, guideContent: step6Text, isSent: extraData.isSent || "否"
         };
-
-        google.script.run
-            .withFailureHandler(err => console.log("AutoSave Failed:", err))
-            .logUserProgress(payload);
+        google.script.run.withFailureHandler(err => console.log("AutoSave Failed:", err)).logUserProgress(payload);
     }
 
-    function formatStep6ToText() {
-        const container = document.getElementById('guide-content');
-        if (!container || container.innerHTML.trim() === '') return ""; 
-        return formatDomToText(container);
-    }
-
+    function formatStep6ToText() { const container = document.getElementById('guide-content'); return (!container || container.innerHTML.trim() === '') ? "" : formatDomToText(container); }
     function formatDomToText(container) {
         const clone = container.cloneNode(true);
-        clone.querySelectorAll('h1, h2, h3, h4, .timeline-title, .phase-title').forEach(el => {
-            el.textContent = `\n【${el.textContent.trim()}】\n`;
-        });
-        clone.querySelectorAll('.task-title').forEach(el => {
-            el.textContent = `  ■ ${el.textContent.trim()}`;
-        });
-        clone.querySelectorAll('.task-5w2h-box, .timeline-content').forEach(el => {
-            el.innerHTML = el.innerHTML.replace(/<br\s*\/?>/gi, '\n      '); 
-            el.textContent = `      > ${el.textContent.trim()}\n`;
-        });
-        clone.querySelectorAll('li').forEach(el => {
-            el.textContent = `   • ${el.textContent.trim()}\n`;
-        });
-        clone.querySelectorAll('p').forEach(el => {
-            el.textContent = `${el.textContent.trim()}\n`;
-        });
-        let text = clone.innerText;
-        text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
-        return text.trim();
+        clone.querySelectorAll('h1, h2, h3, h4, .timeline-title, .phase-title').forEach(el => el.textContent = `\n【${el.textContent.trim()}】\n`);
+        clone.querySelectorAll('.task-title').forEach(el => el.textContent = `  ■ ${el.textContent.trim()}`);
+        clone.querySelectorAll('.task-5w2h-box, .timeline-content').forEach(el => { el.innerHTML = el.innerHTML.replace(/<br\s*\/?>/gi, '\n      '); el.textContent = `      > ${el.textContent.trim()}\n`; });
+        clone.querySelectorAll('li').forEach(el => el.textContent = `   • ${el.textContent.trim()}\n`);
+        clone.querySelectorAll('p').forEach(el => el.textContent = `${el.textContent.trim()}\n`);
+        return clone.innerText.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
     }
-
-    function formatStep1ToText() {
+    
+    // 排版 Helpers (完整展開)
+    function formatStep1ToText() { 
         if (!userData.locations || userData.locations.length === 0) return "(尚未設定地點)";
         return userData.locations.map((l, idx) => {
             const typeStr = l.type === 'out' ? "【搬出 FROM】" : "【搬入 TO】";
@@ -1641,7 +1161,7 @@
         }).join('\n\n');
     }
 
-    function formatStep2ToText() {
+    function formatStep2ToText() { 
         let report = "";
         const isPack = document.getElementById('service-pack')?.checked ? "☑ 是" : "☐ 否";
         const isUnpack = document.getElementById('service-unpack')?.checked ? "☑ 是" : "☐ 否";
@@ -1679,9 +1199,9 @@
             report += `\n`;
         });
         return report;
-    }
+    } 
 
-    function formatStep3ToText() {
+    function formatStep3ToText() { 
         const areaCards = document.querySelectorAll('.area-card');
         if (areaCards.length === 0) return "(尚未新增傢俱區域)";
         let report = "";
@@ -1716,26 +1236,222 @@
         return report;
     }
 
-    function formatStep5ToText() {
-        const totalFeeEl = document.getElementById('result-total-fee');
-        if (!totalFeeEl || totalFeeEl.innerText.trim() === "$ 0") return "";
-        const total = totalFeeEl.innerText;
-        let details = "";
-        const rows = document.querySelectorAll('.breakdown-row');
-        if (rows.length > 0) {
-            details = Array.from(rows).map(row => {
-                const label = row.querySelector('.breakdown-label')?.innerText || "";
-                const desc = row.querySelector('.breakdown-desc')?.innerText || "";
-                const val = row.querySelector('.breakdown-val')?.innerText || "$0";
-                return `${label} ${desc} : ${val}`;
-            }).join('\n');
-        }
-        return `【總價】${total}\n----------------\n${details}`;
+    // ==========================================
+    // 5. 簽名板
+    // ==========================================
+    function initSignaturePad() {
+        const canvas = document.getElementById('signature-canvas'); if(!canvas) return;
+        signaturePad.canvas = canvas; signaturePad.ctx = canvas.getContext('2d');
+        const rect = canvas.parentElement.getBoundingClientRect(); canvas.width = rect.width; canvas.height = rect.height;
+        signaturePad.ctx.lineWidth = 2; signaturePad.ctx.lineCap = 'round'; signaturePad.ctx.strokeStyle = '#000';
+        canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing); canvas.addEventListener('mouseout', stopDrawing);
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); const t = e.touches[0]; canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY })); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.touches[0]; canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: t.clientX, clientY: t.clientY })); }, {passive: false});
+        canvas.addEventListener('touchend', (e) => { e.preventDefault(); canvas.dispatchEvent(new MouseEvent('mouseup', {})); });
     }
+    function startDrawing(e) { signaturePad.isDrawing = true; const pos = getPos(e); signaturePad.ctx.beginPath(); signaturePad.ctx.moveTo(pos.x, pos.y); document.querySelector('.signature-placeholder').style.display = 'none'; }
+    function draw(e) { if (!signaturePad.isDrawing) return; const pos = getPos(e); signaturePad.ctx.lineTo(pos.x, pos.y); signaturePad.ctx.stroke(); }
+    function stopDrawing() { signaturePad.isDrawing = false; signaturePad.ctx.beginPath(); }
+    function getPos(e) { const rect = signaturePad.canvas.getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
+    function clearSignature() { if(!signaturePad.canvas) return; signaturePad.ctx.clearRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height); document.querySelector('.signature-placeholder').style.display = 'block'; }
 
     // ==========================================
-    // 6. 其他 UI 功能 (圖片、AI、計價)
+    // 6. 預約送出
     // ==========================================
+    async function handleBooking() {
+        const btn = document.getElementById('btn-book-now');
+        const isConfirmed = await showConfirm('確定要送出預約嗎？', '系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)');
+        if (!isConfirmed) return;
+
+        const originalText = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 資料上傳中...';
+        try {
+            const imagesData = await prepareAllImages();
+            const guideContent = document.getElementById('guide-content').innerHTML;
+            const totalFee = document.getElementById('result-total-fee').innerText;
+            const notes = document.getElementById('final-special-notes').value;
+
+            // 抓取詳細資料 (略縮與上方 handleBooking 邏輯一致)
+            const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
+                const outSel = card.querySelector('.move-out-select');
+                const inSel = card.querySelector('.move-in-select');
+                const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
+                return {
+                    name: card.querySelector('.area-name-input').value || '打包區域',
+                    moveOutSelect: getTxt(outSel), moveInSelect: getTxt(inSel),
+                    items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
+                        name: row.querySelector('.item-name').innerText, qty: row.querySelector('.val-qty').value,
+                        tags: row.querySelector('.item-tags-detail')?.innerText || '', risk: row.querySelector('.item-risk-text')?.innerText || '', sop: row.querySelector('.item-sop')?.innerText || ''
+                    }))
+                };
+            });
+
+            const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
+                return {
+                    name: card.querySelector('.area-name-input').value || '未命名區域',
+                    floorOut: card.querySelector('.area-out-floor-select').value, floorIn: card.querySelector('.area-in-floor-select').value,
+                    items: [] 
+                };
+            });
+
+            const payload = {
+                basic: userData.basic, locations: userData.locations, packingDetails: packingDetailsData, areas: areasData,                
+                specialNotes: notes, totalFee: totalFee, guideHtml: guideContent, images: imagesData               
+            };
+
+            google.script.run
+                .withSuccessHandler(res => {
+                    if (res.success) {
+                        btn.innerHTML = '<i class="fas fa-check"></i> 預約成功'; btn.classList.remove('bg-brand-dark'); btn.classList.add('bg-green-600');
+                        showMsg('🎉 預約資料已成功送出！', '確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。', 'success');
+                        document.getElementById('action-buttons').style.display = 'none'; document.getElementById('btn-line-connect').classList.remove('hidden');
+                        autoSaveProgress(6, { isSent: "是 (已預約)" });
+                    } else throw new Error(res.error);
+                })
+                .withFailureHandler(err => { throw err; })
+                .processBooking(payload);
+
+        } catch (err) { console.error(err); showMsg('上傳失敗', '請重試或聯繫客服：' + err.message, 'error'); btn.disabled = false; btn.innerHTML = originalText; }
+    }
+
+    // 7. 圖片處理 (省略細節，邏輯同前)
+    async function prepareAllImages() {
+        const result = { route: [], packing: [], item: [] };
+        for (const cardId in cardImages) {
+            for (const imgObj of cardImages[cardId]) {
+                const base64 = await fileToBase64(imgObj.file);
+                const payload = { name: imgObj.file.name, type: imgObj.file.type, base64: base64 };
+                if (['indoor', 'path', 'park'].includes(imgObj.category)) result.route.push(payload);
+                else if (imgObj.category === 'packing') result.packing.push(payload);
+            }
+        }
+        for (const [areaId, files] of areaFilesStore.entries()) {
+            for (const fileObj of files) {
+                const base64 = await fileToBase64(fileObj.file);
+                result.item.push({ name: fileObj.file.name, type: fileObj.file.type, base64: base64 });
+            }
+        }
+        return result;
+    }
+    function fileToBase64(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result.split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); }); }
+    
+    // ==========================================
+    // UI Helpers (完整展開版)
+    // ==========================================
+    
+    function selectType(val, el) { 
+        if(!el) return; 
+        document.querySelectorAll('.option-card').forEach(c => { 
+            c.classList.remove('selected'); 
+            c.querySelector('i').classList.remove('text-brand-yellow'); 
+            c.querySelector('i').classList.add('text-gray-300'); 
+        }); 
+        el.classList.add('selected'); 
+        el.querySelector('i').classList.remove('text-gray-300'); 
+        el.querySelector('i').classList.add('text-brand-yellow'); 
+        document.getElementById('input-type').value = val; 
+    }
+
+    function checkDate() { 
+        const d = document.getElementById('input-date').value; 
+        if(!d) return; 
+        const days = getDiffDays(d); 
+        const box = document.getElementById('date-alert'); 
+        box.className = 'hidden mt-3 p-3 rounded-xl text-sm border bg-gray-50 text-gray-600 font-medium'; 
+        if(days < 3) { 
+            box.classList.remove('hidden'); 
+            box.innerText="🚨 急件！紅色警戒 SOP 啟動"; 
+        } else if(days < 7) { 
+            box.classList.remove('hidden'); 
+            box.innerText="⚡️ 有點趕，建議盡快打包"; 
+        } 
+    }
+
+    function getDiffDays(dateStr) { 
+        const today = new Date(); 
+        today.setHours(0,0,0,0); 
+        return Math.ceil((new Date(dateStr)-today)/(86400000)); 
+    }
+
+    function getStep0Data() { 
+        return { 
+            name: document.getElementById('input-name').value, 
+            date: document.getElementById('input-date').value, 
+            type: document.getElementById('input-type').value, 
+            email: document.getElementById('input-email').value 
+        }; 
+    }
+
+    function loadFromStorage() { 
+        const saved = localStorage.getItem('ayue_user_info'); 
+        if (saved) { 
+            const d = JSON.parse(saved); 
+            if(d.name) document.getElementById('input-name').value=d.name; 
+            if(d.email) document.getElementById('input-email').value=d.email; 
+            if(d.date) { document.getElementById('input-date').value=d.date; checkDate(); } 
+            if(d.type) { 
+                const el = document.querySelector(`.option-card[onclick*='${d.type}']`); 
+                if(el) selectType(d.type, el); 
+            } 
+        } 
+    }
+
+    function addLocation(type) { 
+        if(locCounts[type] >= 5) return showMsg('數量上限', '最多5個', 'warning'); 
+        locCounts[type]++; 
+        const tpl = document.getElementById('tpl-location-card'); 
+        const clone = tpl.content.cloneNode(true); 
+        const card = clone.querySelector('.card'); 
+        card.dataset.type = type; 
+        card.dataset.id = `${type}-${Date.now()}`; 
+        card.querySelector('.badge-type').innerText = (type==='out'?'搬出':'搬入')+' '+locCounts[type]; 
+        card.querySelector('.badge-type').classList.add(type==='out'?'bg-brand-teal':'bg-brand-yellow'); 
+        const citySel = card.querySelector('.city-select'); 
+        Object.keys(TAIWAN_DATA).forEach(c => citySel.add(new Option(c,c))); 
+        citySel.onchange = e => { 
+            const dSel = card.querySelector('.dist-select'); 
+            dSel.innerHTML='<option>區域</option>'; 
+            (TAIWAN_DATA[e.target.value]||[]).forEach(d => dSel.add(new Option(d,d))); 
+        }; 
+        document.getElementById(`${type}-list`).appendChild(card); 
+        cardImages[card.dataset.id] = []; 
+    }
+
+    function removeLocation(btn) { 
+        btn.closest('.card').remove(); 
+    }
+
+    function setElevator(btn, has) { 
+        const c = btn.closest('.card'); 
+        c.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active')); 
+        btn.classList.add('active'); 
+        c.dataset.hasElev = has; 
+        if(has) { 
+            c.querySelector('.floor-yes').classList.remove('hidden'); 
+            c.querySelector('.floor-no').classList.add('hidden'); 
+        } else { 
+            c.querySelector('.floor-yes').classList.add('hidden'); 
+            c.querySelector('.floor-no').classList.remove('hidden'); 
+        } 
+    }
+
+    function toggleFloor(btn, val) { 
+        btn.classList.toggle('selected'); 
+        const p = btn.parentElement; 
+        const selected = Array.from(p.querySelectorAll('.selected')).map(b => b.innerText); 
+        p.parentElement.querySelector('.floor-btn-val').value = selected.join(','); 
+    }
+
+    function setBtnLoading(btn, isLoading) { 
+        if (isLoading) { 
+            btn.classList.add('btn-loading'); 
+            btn.dataset.originalText = btn.innerHTML; 
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; 
+        } else { 
+            btn.classList.remove('btn-loading'); 
+            if(btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText; 
+        } 
+    }
+
     function handleMultiPhoto(input, cat, max) { 
         if(!input.files.length) return; 
         const card = input.closest('.card'); 
@@ -1797,35 +1513,490 @@
         }); 
     }
 
-    function getStep1Data() { return Array.from(document.querySelectorAll('.location-card')).map(c => ({ id: c.dataset.id, type: c.dataset.type, city: c.querySelector('.city-select')?.value || '', area: c.querySelector('.dist-select')?.value || '', addr: c.querySelector('.addr-input')?.value || '', floor: c.dataset.hasElev!=='false' ? (c.querySelector('.floor-input-val')?.value || '') : (c.querySelector('.floor-btn-val')?.value || ''), hasElevator: c.dataset.hasElev!=='false', distance: c.querySelector('.dist-input')?.value || 0, pushUnits: c.querySelector('.dist-input')?.value || 0, craneHours: c.querySelector('.crane-input')?.value || 0, transferCount: c.querySelector('.transfer-input')?.value || 0, riskNote: c.querySelector('.risk-note')?.value || '' })); }
-    function updateLocationOptions(step1Data) { if(!step1Data) return; locationOptions.out = step1Data.filter(l => l.type === 'out').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); locationOptions.in = step1Data.filter(l => l.type === 'in').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); document.querySelectorAll('.packing-card').forEach(card => { populateLocationSelects(card); updateFloorSelect(card.querySelector('.move-out-select'), 'out'); updateFloorSelect(card.querySelector('.move-in-select'), 'in'); updateCollapsedInfo(card.querySelector('.move-out-select')); }); }
-    function populateLocationSelects(card) { const outSel = card.querySelector('.move-out-select') || card.querySelector('.area-move-out-select'); const inSel = card.querySelector('.move-in-select') || card.querySelector('.area-move-in-select'); if(!outSel || !inSel) return; const v1 = outSel.value; const v2 = inSel.value; outSel.innerHTML = '<option value="">選擇地點</option>'; inSel.innerHTML = '<option value="">選擇地點</option>'; locationOptions.out.forEach(o => outSel.add(new Option(o.name, o.id))); locationOptions.in.forEach(o => inSel.add(new Option(o.name, o.id))); outSel.value = v1; inSel.value = v2; }
-    function updateFloorSelect(sel, type) { if(!sel) return; const locId = sel.value; const card = sel.closest('.dynamic-card'); let selectorClass = ''; if (type === 'out') { selectorClass = card.classList.contains('area-card') ? '.area-out-floor-select' : '.move-out-floor-select'; } else { selectorClass = card.classList.contains('area-card') ? '.area-in-floor-select' : '.move-in-floor-select'; } const targetEl = card.querySelector(selectorClass); if(targetEl) { const oldVal = targetEl.value; targetEl.innerHTML = '<option value="">選擇樓層</option>'; const list = type === 'out' ? locationOptions.out : locationOptions.in; const loc = list.find(l => l.id === locId); if (loc && loc.floors) { loc.floors.forEach(f => { if(f.trim()) targetEl.add(new Option(f.trim(), f.trim())); }); } if(oldVal && targetEl.querySelector(`option[value="${oldVal}"]`)) targetEl.value = oldVal; else if(targetEl.options.length > 1) targetEl.selectedIndex = 1; } }
-    function updateCollapsedInfo(el) { const card = el.closest('.dynamic-card'); if (!card || !card.classList.contains('packing-card')) return; const totalQty = Array.from(card.querySelectorAll('.val-qty')).reduce((sum, el) => sum + (parseInt(el.value)||0), 0); card.querySelector('.card-summary').innerText = ` * ${totalQty}`; const outSel = card.querySelector('.move-out-select'); const inSel = card.querySelector('.move-in-select'); const outFloor = card.querySelector('.move-out-floor-select'); const inFloor = card.querySelector('.move-in-floor-select'); const getTxt = (sel) => sel.options[sel.selectedIndex]?.text || '?'; const cleanTxt = (t) => t === '選擇地點' || t === '選擇樓層' ? '?' : t.split('.')[1] || t; const getFl = (sel) => sel.value ? `(${sel.value})` : ''; const outStr = cleanTxt(getTxt(outSel)) + getFl(outFloor); const inStr = cleanTxt(getTxt(inSel)) + getFl(inFloor); const infoEl = card.querySelector('.info-text'); if(outSel.value || inSel.value) { infoEl.innerHTML = `<span class="text-brand-teal font-bold">${outStr}</span> <i class="fas fa-long-arrow-alt-right mx-1 text-gray-300"></i> <span class="text-brand-yellow font-bold">${inStr}</span>`; } else { infoEl.innerText = '尚未設定路線 (點擊展開設定)'; } }
-    function toggleCard(header) { const card = header.closest('.dynamic-card'); const body = card.querySelector('.card-body'); const info = card.querySelector('.card-collapsed-info'); const icon = header.querySelector('.toggle-icon'); if (body.classList.contains('hidden')) { body.classList.remove('hidden'); info.classList.add('hidden'); icon.style.transform = 'translateY(-50%) rotate(90deg)'; } else { body.classList.add('hidden'); info.classList.remove('hidden'); icon.style.transform = 'translateY(-50%) rotate(0deg)'; if(card.classList.contains('packing-card')) updateCollapsedInfo(header); if(card.classList.contains('area-card')) updateAreaSummaryText(header); } }
-    function removeCard(e, btn) { e.stopPropagation(); btn.closest('.dynamic-card').remove(); calcStep2Total(); }
-    function updateCardTitle(input) { input.closest('.dynamic-card').querySelector('.card-title').innerText = input.value || '新區域'; }
-    function copyCard(e, btn) { e.stopPropagation(); const originalCard = btn.closest('.dynamic-card'); const newCard = originalCard.cloneNode(true); const newId = `area-${Date.now()}`; newCard.dataset.id = newId; if(originalCard.classList.contains('packing-card')) { newCard.id = newId; newCard.querySelector('.area-name-input').value += " (複製)"; newCard.querySelector('.photo-scroll-container').id = `container-${newId}`; newCard.querySelector('.photo-scroll-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handlePackingPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-teal transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; newCard.querySelector('.item-list').innerHTML = ''; document.getElementById('packing-area-list').appendChild(newCard); } else { areaFilesStore.set(newId, []); newCard.querySelector('.area-photo-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handleAreaPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-primary transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; newCard.querySelector('.item-list').innerHTML = ''; const aiBtn = newCard.querySelector('.btn-ai-action'); aiBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> <span>開始辨識搬運物</span>'; setBtnLoading(aiBtn, false); originalCard.after(newCard); } const selects = originalCard.querySelectorAll('select'); const newSelects = newCard.querySelectorAll('select'); selects.forEach((sel, i) => newSelects[i].value = sel.value); updateCardTitle(newCard.querySelector('.area-name-input')); }
-    function addPackingArea() { const tpl = document.getElementById('tpl-packing-area'); const clone = tpl.content.cloneNode(true); const card = clone.querySelector('.dynamic-card'); const id = `pack-area-${Date.now()}`; card.dataset.id = id; cardImages[id] = []; card.querySelector('.photo-scroll-container').id = `container-${id}`; card.querySelector('input[type="file"]').setAttribute('onchange', `handlePackingPhoto(this, '${id}')`); populateLocationSelects(card); document.getElementById('packing-area-list').appendChild(card); }
-    function handlePackingPhoto(input, cid) { if(!input.files.length) return; const container = input.parentElement.parentElement; Array.from(input.files).forEach(file => { cardImages[cid].push({ file: file, category: 'packing' }); const reader = new FileReader(); reader.onload = e => { const div = document.createElement('div'); div.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="absolute top-1 right-1 bg-black/50 text-white w-5 h-5 rounded-full flex items-center justify-center cursor-pointer text-xs" onclick="removePhoto(this, '${cid}', '${file.name}')">×</div>`; container.insertBefore(div, input.parentElement); }; reader.readAsDataURL(file); }); input.value = ''; }
-    function runPackingAnalysis(btn) { const card = btn.closest('.dynamic-card'); const cid = card.dataset.id; const imgs = cardImages[cid]||[]; if (imgs.length === 0) return showMsg('提醒', '請先拍攝櫃內或雜物照片', 'warning'); setBtnLoading(btn, true); const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); Promise.all(ps).then(pl => { google.script.run.withSuccessHandler(res => { setBtnLoading(btn, false); if (res.error) { console.error("AI Error:", res); return showMsg('AI 分析失敗', res.error, 'error'); } btn.innerHTML = '<i class="fas fa-check"></i> 分析完成'; const list = card.querySelector('.item-list'); list.innerHTML = ''; list.classList.remove('hidden'); let itemsToRender = []; if (res.items && Array.isArray(res.items)) itemsToRender = res.items; else if (Array.isArray(res)) itemsToRender = res; if (itemsToRender.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">AI 沒有辨識出具體物品，請試著靠近一點拍攝。</div>'; return; } const itemTpl = document.getElementById('tpl-packing-item'); itemsToRender.forEach(item => { const clone = itemTpl.content.cloneNode(true); clone.querySelector('.item-name').innerText = item.name || '未命名物品'; clone.querySelector('.item-qty').innerText = item.qty || 1; clone.querySelector('.val-qty').value = item.qty || 1; if (item.tags) clone.querySelector('.item-tags-detail').innerText = item.tags; else { const tagEl = clone.querySelector('.item-tags-detail'); if(tagEl && tagEl.parentElement) tagEl.parentElement.classList.add('hidden'); } if (item.sop) { const sopContainer = clone.querySelector('.item-sop'); let sopRaw = item.sop || ''; if (sopRaw.match(/\d+\./)) { const steps = sopRaw.split(/(?=\d+\.)/g); let tableHtml = '<table class="w-full text-xs border-collapse">'; let hasContent = false; steps.forEach(step => { step = step.trim(); if (!step) return; const parts = step.match(/^(\d+\.[^：:]+)[：:]([\s\S]*)/); if (parts && parts.length >= 3) { hasContent = true; const title = parts[1].trim(); const content = parts[2].trim(); tableHtml += ` <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50"> <td class="py-2 pr-2 font-bold text-brand-teal whitespace-nowrap align-top w-[80px]">${title}</td> <td class="py-2 text-gray-600 align-top leading-relaxed text-justify">${content}</td> </tr>`; } else { if(step.length > 2) { tableHtml += ` <tr class="border-b border-gray-100 last:border-0"> <td colspan="2" class="py-2 text-gray-600 align-top leading-relaxed">${step}</td> </tr>`; } } }); tableHtml += '</table>'; sopContainer.innerHTML = hasContent ? tableHtml : sopRaw.split('\n').join('<br>'); } else { sopContainer.innerHTML = sopRaw.split('\n').join('<br>'); } } if (item.materials) clone.querySelector('.item-materials').innerText = item.materials || ''; if (item.risk) { clone.querySelector('.item-risk-text').innerText = item.risk; clone.querySelector('.item-risk').classList.remove('hidden'); } if(item.summary) { clone.querySelector('.item-summary-text').innerText = item.summary; clone.querySelector('.item-summary').classList.remove('hidden'); } list.appendChild(clone); }); calcStep2Total(); updateCollapsedInfo(card); }).analyzePackingImages(pl); }); }
-    function toggleItem(header) { const card = header.closest('.item-card'); const body = card.querySelector('.item-body'); const icon = header.querySelector('.toggle-icon-item'); if (body.classList.contains('active')) { body.classList.remove('active'); body.style.display = 'none'; icon.classList.remove('rotate-90'); } else { body.style.display = 'block'; setTimeout(() => { body.classList.add('active'); }, 10); icon.classList.add('rotate-90'); } }
-    function removeItem(e, btn) { const card = btn.closest('.dynamic-card'); e.stopPropagation(); btn.closest('.item-card').remove(); calcStep2Total(); updateCollapsedInfo(card); }
-    function calcStep2Total() { let totalBoxes = 0; document.querySelectorAll('.val-qty').forEach(el => { totalBoxes += parseInt(el.value || 0); }); const boxCount = parseInt(document.getElementById('material-box').value) || 0; const bubbleCount = parseInt(document.getElementById('material-bubble').value) || 0; let fee = 0; if (document.getElementById('service-pack').checked) fee += totalBoxes * 500; if (document.getElementById('service-unpack').checked) fee += totalBoxes * 600; fee += boxCount * 50; fee += bubbleCount * 500; document.getElementById('step2-total').innerText = `$ ${fee.toLocaleString()}`; userData.packing = { totalBoxes, fee }; }
-    function updateStep3Dropdowns() { document.querySelectorAll('.area-card').forEach(card => { populateLocationSelects(card); }); }
-    function addAreaCard() { const tpl = document.getElementById('tpl-area-card'); const clone = tpl.content.cloneNode(true); const card = clone.querySelector('.area-card'); const id = `area-${Date.now()}`; card.dataset.id = id; areaFilesStore.set(id, []); populateLocationSelects(card); document.getElementById('area-list-container').appendChild(card); updateCardTitle(card.querySelector('.area-name-input')); }
-    function removeAreaCard(e, btn) { e.stopPropagation(); const card = btn.closest('.area-card'); areaFilesStore.delete(card.dataset.id); card.remove(); const undoBtn = document.getElementById('undo-area-btn'); undoBtn.disabled = false; undoBtn.onclick = () => { addAreaCard(); undoBtn.disabled = true; }; }
-    function undoDeleteArea() { addAreaCard(); document.getElementById('undo-area-btn').disabled = true; }
-    function updateAreaRoute(select) { const type = select.classList.contains('area-move-out-select') ? 'out' : 'in'; updateFloorSelect(select, type); updateAreaSummaryText(select); }
-    function updateAreaSummaryText(el) { const card = el.closest('.area-card'); const outSel = card.querySelector('.area-move-out-select'); const inSel = card.querySelector('.area-move-in-select'); const outFloor = card.querySelector('.area-out-floor-select'); const inFloor = card.querySelector('.area-in-floor-select'); const getTxt = (sel) => sel.options[sel.selectedIndex]?.text || '?'; const cleanTxt = (t) => t === '選擇地點' || t === '選擇樓層' ? '?' : t.split('.')[1] || t; const getFl = (sel) => sel.value ? `(${sel.value})` : ''; const outT = cleanTxt(getTxt(outSel)) + getFl(outFloor); const inT = cleanTxt(getTxt(inSel)) + getFl(inFloor); const infoEl = card.querySelector('.info-text'); if(outSel.value || inSel.value) { infoEl.innerHTML = `${outT} <i class="fas fa-long-arrow-alt-right mx-2 text-gray-300"></i> ${inT}`; } else { infoEl.innerText = '尚未設定路線'; } }
-    function handleAreaPhoto(input) { if (!input.files.length) return; const card = input.closest('.area-card'); const areaId = card.dataset.id; const container = card.querySelector('.area-photo-container'); const currentFiles = areaFilesStore.get(areaId) || []; Array.from(input.files).forEach(file => { if (currentFiles.some(f => f.file.name === file.name && f.file.size === file.size)) return; const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`; currentFiles.push({ id: fileId, file: file, processed: false }); const thumb = document.createElement('div'); thumb.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; thumb.dataset.fileId = fileId; const reader = new FileReader(); reader.onload = e => { thumb.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="btn-delete-img" onclick="deleteAreaPhoto('${areaId}', '${fileId}', this)">×</div>`; container.insertBefore(thumb, container.lastElementChild); }; reader.readAsDataURL(file); }); areaFilesStore.set(areaId, currentFiles); input.value = ''; }
-    function deleteAreaPhoto(areaId, fileId, btn) { let files = areaFilesStore.get(areaId); files = files.filter(f => f.id !== fileId); areaFilesStore.set(areaId, files); btn.closest('.photo-thumbnail').remove(); }
-    async function runAreaRecognition(btn) { const card = btn.closest('.area-card'); const areaId = card.dataset.id; const files = (areaFilesStore.get(areaId) || []).filter(f => !f.processed); if (!files.length) return showMsg('提醒', '沒有新的照片需要辨識', 'warning'); setBtnLoading(btn, true); const areaName = card.querySelector('.area-name-input').value; const floorText = card.querySelector('.area-out-floor-select').value; const listContainer = card.querySelector('.item-list'); listContainer.classList.remove('hidden'); for (const f of files) { try { const base64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(f.file); }); const resultText = await new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).callGeminiApi(base64, f.file.type, areaName, floorText); }); parseAndRenderAiResult(resultText, listContainer); f.processed = true; const thumb = card.querySelector(`.photo-thumbnail[data-file-id="${f.id}"]`); if(thumb) thumb.style.opacity = '0.5'; } catch (err) { console.error('AI Error:', err); } } setBtnLoading(btn, false); btn.innerHTML = '<i class="fas fa-check"></i> 辨識完成'; }
-    function parseAndRenderAiResult(text, container) { if (!text || text.startsWith('錯誤')) return; const lines = text.trim().split('\n').filter(l => l.trim() !== ''); const tpl = document.getElementById('tpl-ai-item-row'); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); if (line.startsWith('區域：') || line.startsWith('【')) continue; const nextLine = lines[i+1] ? lines[i+1].trim() : ''; if (nextLine.startsWith('【')) { const match = line.match(/(.+) \* (\d+)/); const name = match ? match[1].trim() : line; const qty = match ? match[2].trim() : '1'; const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; let type='', mat='', diff='', dis=''; const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; attrs.forEach(a => { if(KNOWN_DIFFS.includes(a)) diff = a; else if(KNOWN_DIS.includes(a)) dis = a; else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; else mat += a + ' '; }); if(!type && attrs.length>0) type = attrs[0]; let riskText = '', skipLines = 1; if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); skipLines = 2; } const clone = tpl.content.cloneNode(true); const row = clone.querySelector('.item-card'); row.querySelector('.inp-name').value = name; row.querySelector('.inp-qty').value = qty; row.querySelector('.inp-type').value = type; row.querySelector('.inp-material').value = mat; row.querySelector('.inp-difficulty').value = diff || '一人可搬'; row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; row.querySelector('.inp-risknote').value = riskText; updateAiItemDisplay(row.querySelector('.inp-name')); container.appendChild(row); i += skipLines; } } }
-    function updateAiItemDisplay(input) { const card = input.closest('.item-card'); const name = card.querySelector('.inp-name').value; const qty = card.querySelector('.inp-qty').value; const type = card.querySelector('.inp-type').value; const mat = card.querySelector('.inp-material').value; const diff = card.querySelector('.inp-difficulty').value; const dis = card.querySelector('.inp-disassembly').value; const risk = card.querySelector('.inp-risknote').value; card.querySelector('.item-name').innerText = name; card.querySelector('.item-qty').innerText = `${qty}`; const tagContainer = card.querySelector('.item-tags-row'); let html = ''; if(type) html += `<span class="tag-std">${type}</span>`; if(mat) html += `<span class="tag-std">${mat}</span>`; let diffClass = 'tag-std'; if (diff.includes('技術') || diff.includes('特殊')) diffClass = 'tag-highlight'; html += `<span class="${diffClass}">${diff}</span>`; if(dis) html += `<span class="tag-std">${dis}</span>`; tagContainer.innerHTML = html; const riskBar = card.querySelector('.item-risk-bar'); if(risk && risk !== '無' && risk.trim() !== '') { riskBar.innerText = risk; riskBar.classList.remove('hidden'); riskBar.classList.remove('risk-bg-red', 'risk-bg-orange', 'risk-bg-green'); if (diff.includes('特殊') || diff.includes('技術')) riskBar.classList.add('risk-bg-red'); else if (diff.includes('二人')) riskBar.classList.add('risk-bg-orange'); else riskBar.classList.add('risk-bg-green'); } else { riskBar.classList.add('hidden'); } }
-    function toggleAiItem(header) { const body = header.nextElementSibling; const icon = header.querySelector('.item-arrow-icon'); if(body.classList.contains('active')) { body.classList.remove('active'); icon.style.transform = 'rotate(0deg)'; } else { body.classList.add('active'); icon.style.transform = 'rotate(90deg)'; } }
-    
-    // [修正] 使用 SweetAlert2 取代 confirm
+    function updateLocationOptions(step1Data) { 
+        if(!step1Data) return; 
+        locationOptions.out = step1Data.filter(l => l.type === 'out').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); 
+        locationOptions.in = step1Data.filter(l => l.type === 'in').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); 
+        document.querySelectorAll('.packing-card').forEach(card => { 
+            populateLocationSelects(card); 
+            updateFloorSelect(card.querySelector('.move-out-select'), 'out'); 
+            updateFloorSelect(card.querySelector('.move-in-select'), 'in'); 
+            updateCollapsedInfo(card.querySelector('.move-out-select')); 
+        }); 
+    }
+
+    function populateLocationSelects(card) { 
+        const outSel = card.querySelector('.move-out-select') || card.querySelector('.area-move-out-select'); 
+        const inSel = card.querySelector('.move-in-select') || card.querySelector('.area-move-in-select'); 
+        if(!outSel || !inSel) return; 
+        const v1 = outSel.value; 
+        const v2 = inSel.value; 
+        outSel.innerHTML = '<option value="">選擇地點</option>'; 
+        inSel.innerHTML = '<option value="">選擇地點</option>'; 
+        locationOptions.out.forEach(o => outSel.add(new Option(o.name, o.id))); 
+        locationOptions.in.forEach(o => inSel.add(new Option(o.name, o.id))); 
+        outSel.value = v1; 
+        inSel.value = v2; 
+    }
+
+    function updateFloorSelect(sel, type) { 
+        if(!sel) return; 
+        const locId = sel.value; 
+        const card = sel.closest('.dynamic-card'); 
+        let selectorClass = ''; 
+        if (type === 'out') { 
+            selectorClass = card.classList.contains('area-card') ? '.area-out-floor-select' : '.move-out-floor-select'; 
+        } else { 
+            selectorClass = card.classList.contains('area-card') ? '.area-in-floor-select' : '.move-in-floor-select'; 
+        } 
+        const targetEl = card.querySelector(selectorClass); 
+        if(targetEl) { 
+            const oldVal = targetEl.value; 
+            targetEl.innerHTML = '<option value="">選擇樓層</option>'; 
+            const list = type === 'out' ? locationOptions.out : locationOptions.in; 
+            const loc = list.find(l => l.id === locId); 
+            if (loc && loc.floors) { 
+                loc.floors.forEach(f => { if(f.trim()) targetEl.add(new Option(f.trim(), f.trim())); }); 
+            } 
+            if(oldVal && targetEl.querySelector(`option[value="${oldVal}"]`)) targetEl.value = oldVal; 
+            else if(targetEl.options.length > 1) targetEl.selectedIndex = 1; 
+        } 
+    }
+
+    function updateCollapsedInfo(el) { 
+        const card = el.closest('.dynamic-card'); 
+        if (!card || !card.classList.contains('packing-card')) return; 
+        const totalQty = Array.from(card.querySelectorAll('.val-qty')).reduce((sum, el) => sum + (parseInt(el.value)||0), 0); 
+        card.querySelector('.card-summary').innerText = ` * ${totalQty}`; 
+        const outSel = card.querySelector('.move-out-select'); 
+        const inSel = card.querySelector('.move-in-select'); 
+        const outFloor = card.querySelector('.move-out-floor-select'); 
+        const inFloor = card.querySelector('.move-in-floor-select'); 
+        const getTxt = (sel) => sel.options[sel.selectedIndex]?.text || '?'; 
+        const cleanTxt = (t) => t === '選擇地點' || t === '選擇樓層' ? '?' : t.split('.')[1] || t; 
+        const getFl = (sel) => sel.value ? `(${sel.value})` : ''; 
+        const outStr = cleanTxt(getTxt(outSel)) + getFl(outFloor); 
+        const inStr = cleanTxt(getTxt(inSel)) + getFl(inFloor); 
+        const infoEl = card.querySelector('.info-text'); 
+        if(outSel.value || inSel.value) { 
+            infoEl.innerHTML = `<span class="text-brand-teal font-bold">${outStr}</span> <i class="fas fa-long-arrow-alt-right mx-1 text-gray-300"></i> <span class="text-brand-yellow font-bold">${inStr}</span>`; 
+        } else { 
+            infoEl.innerText = '尚未設定路線 (點擊展開設定)'; 
+        } 
+    }
+
+    function toggleCard(header) { 
+        const card = header.closest('.dynamic-card'); 
+        const body = card.querySelector('.card-body'); 
+        const info = card.querySelector('.card-collapsed-info'); 
+        const icon = header.querySelector('.toggle-icon'); 
+        if (body.classList.contains('hidden')) { 
+            body.classList.remove('hidden'); 
+            info.classList.add('hidden'); 
+            icon.style.transform = 'translateY(-50%) rotate(90deg)'; 
+        } else { 
+            body.classList.add('hidden'); 
+            info.classList.remove('hidden'); 
+            icon.style.transform = 'translateY(-50%) rotate(0deg)'; 
+            if(card.classList.contains('packing-card')) updateCollapsedInfo(header); 
+            if(card.classList.contains('area-card')) updateAreaSummaryText(header); 
+        } 
+    }
+
+    function removeCard(e, btn) { 
+        e.stopPropagation(); 
+        btn.closest('.dynamic-card').remove(); 
+        calcStep2Total(); 
+    }
+
+    function updateCardTitle(input) { 
+        input.closest('.dynamic-card').querySelector('.card-title').innerText = input.value || '新區域'; 
+    }
+
+    function copyCard(e, btn) { 
+        e.stopPropagation(); 
+        const originalCard = btn.closest('.dynamic-card'); 
+        const newCard = originalCard.cloneNode(true); 
+        const newId = `area-${Date.now()}`; 
+        newCard.dataset.id = newId; 
+        if(originalCard.classList.contains('packing-card')) { 
+            newCard.id = newId; 
+            newCard.querySelector('.area-name-input').value += " (複製)"; 
+            newCard.querySelector('.photo-scroll-container').id = `container-${newId}`; 
+            newCard.querySelector('.photo-scroll-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handlePackingPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-teal transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; 
+            newCard.querySelector('.item-list').innerHTML = ''; 
+            document.getElementById('packing-area-list').appendChild(newCard); 
+        } else { 
+            areaFilesStore.set(newId, []); 
+            newCard.querySelector('.area-photo-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handleAreaPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-primary transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; 
+            newCard.querySelector('.item-list').innerHTML = ''; 
+            const aiBtn = newCard.querySelector('.btn-ai-action'); 
+            aiBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> <span>開始辨識搬運物</span>'; 
+            setBtnLoading(aiBtn, false); 
+            originalCard.after(newCard); 
+        } 
+        const selects = originalCard.querySelectorAll('select'); 
+        const newSelects = newCard.querySelectorAll('select'); 
+        selects.forEach((sel, i) => newSelects[i].value = sel.value); 
+        updateCardTitle(newCard.querySelector('.area-name-input')); 
+    }
+
+    function addPackingArea() { 
+        const tpl = document.getElementById('tpl-packing-area'); 
+        const clone = tpl.content.cloneNode(true); 
+        const card = clone.querySelector('.dynamic-card'); 
+        const id = `pack-area-${Date.now()}`; 
+        card.dataset.id = id; 
+        cardImages[id] = []; 
+        card.querySelector('.photo-scroll-container').id = `container-${id}`; 
+        card.querySelector('input[type="file"]').setAttribute('onchange', `handlePackingPhoto(this, '${id}')`); 
+        populateLocationSelects(card); 
+        document.getElementById('packing-area-list').appendChild(card); 
+    }
+
+    function handlePackingPhoto(input, cid) { 
+        if(!input.files.length) return; 
+        const container = input.parentElement.parentElement; 
+        Array.from(input.files).forEach(file => { 
+            cardImages[cid].push({ file: file, category: 'packing' }); 
+            const reader = new FileReader(); 
+            reader.onload = e => { 
+                const div = document.createElement('div'); 
+                div.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; 
+                div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="absolute top-1 right-1 bg-black/50 text-white w-5 h-5 rounded-full flex items-center justify-center cursor-pointer text-xs" onclick="removePhoto(this, '${cid}', '${file.name}')">×</div>`; 
+                container.insertBefore(div, input.parentElement); 
+            }; 
+            reader.readAsDataURL(file); 
+        }); 
+        input.value = ''; 
+    }
+
+    function runPackingAnalysis(btn) { 
+        const card = btn.closest('.dynamic-card'); 
+        const cid = card.dataset.id; 
+        const imgs = cardImages[cid]||[]; 
+        if (imgs.length === 0) return showMsg('提醒', '請先拍攝櫃內或雜物照片', 'warning'); 
+        setBtnLoading(btn, true); 
+        const ps = imgs.map(i => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({base64:e.target.result.split(',')[1], mimeType:i.file.type}); rd.readAsDataURL(i.file); })); 
+        Promise.all(ps).then(pl => { 
+            google.script.run.withSuccessHandler(res => { 
+                setBtnLoading(btn, false); 
+                if (res.error) { 
+                    console.error("AI Error:", res); 
+                    return showMsg('AI 分析失敗', res.error, 'error'); 
+                } 
+                btn.innerHTML = '<i class="fas fa-check"></i> 分析完成'; 
+                const list = card.querySelector('.item-list'); 
+                list.innerHTML = ''; 
+                list.classList.remove('hidden'); 
+                let itemsToRender = []; 
+                if (res.items && Array.isArray(res.items)) itemsToRender = res.items; 
+                else if (Array.isArray(res)) itemsToRender = res; 
+                if (itemsToRender.length === 0) { 
+                    list.innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">AI 沒有辨識出具體物品，請試著靠近一點拍攝。</div>'; 
+                    return; 
+                } 
+                const itemTpl = document.getElementById('tpl-packing-item'); 
+                itemsToRender.forEach(item => { 
+                    const clone = itemTpl.content.cloneNode(true); 
+                    clone.querySelector('.item-name').innerText = item.name || '未命名物品'; 
+                    clone.querySelector('.item-qty').innerText = item.qty || 1; 
+                    clone.querySelector('.val-qty').value = item.qty || 1; 
+                    if (item.tags) clone.querySelector('.item-tags-detail').innerText = item.tags; 
+                    else { 
+                        const tagEl = clone.querySelector('.item-tags-detail'); 
+                        if(tagEl && tagEl.parentElement) tagEl.parentElement.classList.add('hidden'); 
+                    } 
+                    if (item.sop) { 
+                        const sopContainer = clone.querySelector('.item-sop'); 
+                        let sopRaw = item.sop || ''; 
+                        if (sopRaw.match(/\d+\./)) { 
+                            const steps = sopRaw.split(/(?=\d+\.)/g); 
+                            let tableHtml = '<table class="w-full text-xs border-collapse">'; 
+                            let hasContent = false; 
+                            steps.forEach(step => { 
+                                step = step.trim(); 
+                                if (!step) return; 
+                                const parts = step.match(/^(\d+\.[^：:]+)[：:]([\s\S]*)/); 
+                                if (parts && parts.length >= 3) { 
+                                    hasContent = true; 
+                                    const title = parts[1].trim(); 
+                                    const content = parts[2].trim(); 
+                                    tableHtml += ` <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50"> <td class="py-2 pr-2 font-bold text-brand-teal whitespace-nowrap align-top w-[80px]">${title}</td> <td class="py-2 text-gray-600 align-top leading-relaxed text-justify">${content}</td> </tr>`; 
+                                } else { 
+                                    if(step.length > 2) { 
+                                        tableHtml += ` <tr class="border-b border-gray-100 last:border-0"> <td colspan="2" class="py-2 text-gray-600 align-top leading-relaxed">${step}</td> </tr>`; 
+                                    } 
+                                } 
+                            }); 
+                            tableHtml += '</table>'; 
+                            sopContainer.innerHTML = hasContent ? tableHtml : sopRaw.split('\n').join('<br>'); 
+                        } else { 
+                            sopContainer.innerHTML = sopRaw.split('\n').join('<br>'); 
+                        } 
+                    } 
+                    if (item.materials) clone.querySelector('.item-materials').innerText = item.materials || ''; 
+                    if (item.risk) { 
+                        clone.querySelector('.item-risk-text').innerText = item.risk; 
+                        clone.querySelector('.item-risk').classList.remove('hidden'); 
+                    } 
+                    if(item.summary) { 
+                        clone.querySelector('.item-summary-text').innerText = item.summary; 
+                        clone.querySelector('.item-summary').classList.remove('hidden'); 
+                    } 
+                    list.appendChild(clone); 
+                }); 
+                calcStep2Total(); 
+                updateCollapsedInfo(card); 
+            }).analyzePackingImages(pl); 
+        }); 
+    }
+
+    function toggleItem(header) { 
+        const card = header.closest('.item-card'); 
+        const body = card.querySelector('.item-body'); 
+        const icon = header.querySelector('.toggle-icon-item'); 
+        if (body.classList.contains('active')) { 
+            body.classList.remove('active'); 
+            body.style.display = 'none'; 
+            icon.classList.remove('rotate-90'); 
+        } else { 
+            body.style.display = 'block'; 
+            setTimeout(() => { body.classList.add('active'); }, 10); 
+            icon.classList.add('rotate-90'); 
+        } 
+    }
+
+    function removeItem(e, btn) { 
+        const card = btn.closest('.dynamic-card'); 
+        e.stopPropagation(); 
+        btn.closest('.item-card').remove(); 
+        calcStep2Total(); 
+        updateCollapsedInfo(card); 
+    }
+
+    function calcStep2Total() { 
+        let totalBoxes = 0; 
+        document.querySelectorAll('.val-qty').forEach(el => { totalBoxes += parseInt(el.value || 0); }); 
+        const boxCount = parseInt(document.getElementById('material-box').value) || 0; 
+        const bubbleCount = parseInt(document.getElementById('material-bubble').value) || 0; 
+        let fee = 0; 
+        if (document.getElementById('service-pack').checked) fee += totalBoxes * 500; 
+        if (document.getElementById('service-unpack').checked) fee += totalBoxes * 600; 
+        fee += boxCount * 50; 
+        fee += bubbleCount * 500; 
+        document.getElementById('step2-total').innerText = `$ ${fee.toLocaleString()}`; 
+        userData.packing = { totalBoxes, fee }; 
+    }
+
+    function updateStep3Dropdowns() { 
+        document.querySelectorAll('.area-card').forEach(card => { populateLocationSelects(card); }); 
+    }
+
+    function addAreaCard() { 
+        const tpl = document.getElementById('tpl-area-card'); 
+        const clone = tpl.content.cloneNode(true); 
+        const card = clone.querySelector('.area-card'); 
+        const id = `area-${Date.now()}`; 
+        card.dataset.id = id; 
+        areaFilesStore.set(id, []); 
+        populateLocationSelects(card); 
+        document.getElementById('area-list-container').appendChild(card); 
+        updateCardTitle(card.querySelector('.area-name-input')); 
+    }
+
+    function removeAreaCard(e, btn) { 
+        e.stopPropagation(); 
+        const card = btn.closest('.area-card'); 
+        areaFilesStore.delete(card.dataset.id); 
+        card.remove(); 
+        const undoBtn = document.getElementById('undo-area-btn'); 
+        undoBtn.disabled = false; 
+        undoBtn.onclick = () => { addAreaCard(); undoBtn.disabled = true; }; 
+    }
+
+    function undoDeleteArea() { 
+        addAreaCard(); 
+        document.getElementById('undo-area-btn').disabled = true; 
+    }
+
+    function updateAreaRoute(select) { 
+        const type = select.classList.contains('area-move-out-select') ? 'out' : 'in'; 
+        updateFloorSelect(select, type); 
+        updateAreaSummaryText(select); 
+    }
+
+    function updateAreaSummaryText(el) { 
+        const card = el.closest('.area-card'); 
+        const outSel = card.querySelector('.area-move-out-select'); 
+        const inSel = card.querySelector('.area-move-in-select'); 
+        const outFloor = card.querySelector('.area-out-floor-select'); 
+        const inFloor = card.querySelector('.area-in-floor-select'); 
+        const getTxt = (sel) => sel.options[sel.selectedIndex]?.text || '?'; 
+        const cleanTxt = (t) => t === '選擇地點' || t === '選擇樓層' ? '?' : t.split('.')[1] || t; 
+        const getFl = (sel) => sel.value ? `(${sel.value})` : ''; 
+        const outT = cleanTxt(getTxt(outSel)) + getFl(outFloor); 
+        const inT = cleanTxt(getTxt(inSel)) + getFl(inFloor); 
+        const infoEl = card.querySelector('.info-text'); 
+        if(outSel.value || inSel.value) { 
+            infoEl.innerHTML = `${outT} <i class="fas fa-long-arrow-alt-right mx-2 text-gray-300"></i> ${inT}`; 
+        } else { 
+            infoEl.innerText = '尚未設定路線'; 
+        } 
+    }
+
+    function handleAreaPhoto(input) { 
+        if (!input.files.length) return; 
+        const card = input.closest('.area-card'); 
+        const areaId = card.dataset.id; 
+        const container = card.querySelector('.area-photo-container'); 
+        const currentFiles = areaFilesStore.get(areaId) || []; 
+        Array.from(input.files).forEach(file => { 
+            if (currentFiles.some(f => f.file.name === file.name && f.file.size === file.size)) return; 
+            const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`; 
+            currentFiles.push({ id: fileId, file: file, processed: false }); 
+            const thumb = document.createElement('div'); 
+            thumb.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; 
+            thumb.dataset.fileId = fileId; 
+            const reader = new FileReader(); 
+            reader.onload = e => { 
+                thumb.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="btn-delete-img" onclick="deleteAreaPhoto('${areaId}', '${fileId}', this)">×</div>`; 
+                container.insertBefore(thumb, container.lastElementChild); 
+            }; 
+            reader.readAsDataURL(file); 
+        }); 
+        areaFilesStore.set(areaId, currentFiles); 
+        input.value = ''; 
+    }
+
+    function deleteAreaPhoto(areaId, fileId, btn) { 
+        let files = areaFilesStore.get(areaId); 
+        files = files.filter(f => f.id !== fileId); 
+        areaFilesStore.set(areaId, files); 
+        btn.closest('.photo-thumbnail').remove(); 
+    }
+
+    async function runAreaRecognition(btn) { 
+        const card = btn.closest('.area-card'); 
+        const areaId = card.dataset.id; 
+        const files = (areaFilesStore.get(areaId) || []).filter(f => !f.processed); 
+        if (!files.length) return showMsg('提醒', '沒有新的照片需要辨識', 'warning'); 
+        setBtnLoading(btn, true); 
+        const areaName = card.querySelector('.area-name-input').value; 
+        const floorText = card.querySelector('.area-out-floor-select').value; 
+        const listContainer = card.querySelector('.item-list'); 
+        listContainer.classList.remove('hidden'); 
+        for (const f of files) { 
+            try { 
+                const base64 = await new Promise((res) => { 
+                    const r = new FileReader(); 
+                    r.onload = () => res(r.result.split(',')[1]); 
+                    r.readAsDataURL(f.file); 
+                }); 
+                const resultText = await new Promise((resolve, reject) => { 
+                    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).callGeminiApi(base64, f.file.type, areaName, floorText); 
+                }); 
+                parseAndRenderAiResult(resultText, listContainer); 
+                f.processed = true; 
+                const thumb = card.querySelector(`.photo-thumbnail[data-file-id="${f.id}"]`); 
+                if(thumb) thumb.style.opacity = '0.5'; 
+            } catch (err) { 
+                console.error('AI Error:', err); 
+            } 
+        } 
+        setBtnLoading(btn, false); 
+        btn.innerHTML = '<i class="fas fa-check"></i> 辨識完成'; 
+    }
+
+    function parseAndRenderAiResult(text, container) { 
+        if (!text || text.startsWith('錯誤')) return; 
+        const lines = text.trim().split('\n').filter(l => l.trim() !== ''); 
+        const tpl = document.getElementById('tpl-ai-item-row'); 
+        for (let i = 0; i < lines.length; i++) { 
+            const line = lines[i].trim(); 
+            if (line.startsWith('區域：') || line.startsWith('【')) continue; 
+            const nextLine = lines[i+1] ? lines[i+1].trim() : ''; 
+            if (nextLine.startsWith('【')) { 
+                const match = line.match(/(.+) \* (\d+)/); 
+                const name = match ? match[1].trim() : line; 
+                const qty = match ? match[2].trim() : '1'; 
+                const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; 
+                let type='', mat='', diff='', dis=''; 
+                const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; 
+                const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; 
+                attrs.forEach(a => { 
+                    if(KNOWN_DIFFS.includes(a)) diff = a; 
+                    else if(KNOWN_DIS.includes(a)) dis = a; 
+                    else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; 
+                    else mat += a + ' '; 
+                }); 
+                if(!type && attrs.length>0) type = attrs[0]; 
+                let riskText = '', skipLines = 1; 
+                if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { 
+                    riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); 
+                    skipLines = 2; 
+                } 
+                const clone = tpl.content.cloneNode(true); 
+                const row = clone.querySelector('.item-card'); 
+                row.querySelector('.inp-name').value = name; 
+                row.querySelector('.inp-qty').value = qty; 
+                row.querySelector('.inp-type').value = type; 
+                row.querySelector('.inp-material').value = mat; 
+                row.querySelector('.inp-difficulty').value = diff || '一人可搬'; 
+                row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; 
+                row.querySelector('.inp-risknote').value = riskText; 
+                updateAiItemDisplay(row.querySelector('.inp-name')); 
+                container.appendChild(row); 
+                i += skipLines; 
+            } 
+        } 
+    }
+
+    function updateAiItemDisplay(input) { 
+        const card = input.closest('.item-card'); 
+        const name = card.querySelector('.inp-name').value; 
+        const qty = card.querySelector('.inp-qty').value; 
+        const type = card.querySelector('.inp-type').value; 
+        const mat = card.querySelector('.inp-material').value; 
+        const diff = card.querySelector('.inp-difficulty').value; 
+        const dis = card.querySelector('.inp-disassembly').value; 
+        const risk = card.querySelector('.inp-risknote').value; 
+        card.querySelector('.item-name').innerText = name; 
+        card.querySelector('.item-qty').innerText = `${qty}`; 
+        const tagContainer = card.querySelector('.item-tags-row'); 
+        let html = ''; 
+        if(type) html += `<span class="tag-std">${type}</span>`; 
+        if(mat) html += `<span class="tag-std">${mat}</span>`; 
+        let diffClass = 'tag-std'; 
+        if (diff.includes('技術') || diff.includes('特殊')) diffClass = 'tag-highlight'; 
+        html += `<span class="${diffClass}">${diff}</span>`; 
+        if(dis) html += `<span class="tag-std">${dis}</span>`; 
+        tagContainer.innerHTML = html; 
+        const riskBar = card.querySelector('.item-risk-bar'); 
+        if(risk && risk !== '無' && risk.trim() !== '') { 
+            riskBar.innerText = risk; 
+            riskBar.classList.remove('hidden'); 
+            riskBar.classList.remove('risk-bg-red', 'risk-bg-orange', 'risk-bg-green'); 
+            if (diff.includes('特殊') || diff.includes('技術')) riskBar.classList.add('risk-bg-red'); 
+            else if (diff.includes('二人')) riskBar.classList.add('risk-bg-orange'); 
+            else riskBar.classList.add('risk-bg-green'); 
+        } else { 
+            riskBar.classList.add('hidden'); 
+        } 
+    }
+
+    function toggleAiItem(header) { 
+        const body = header.nextElementSibling; 
+        const icon = header.querySelector('.item-arrow-icon'); 
+        if(body.classList.contains('active')) { 
+            body.classList.remove('active'); 
+            icon.style.transform = 'rotate(0deg)'; 
+        } else { 
+            body.classList.add('active'); 
+            icon.style.transform = 'rotate(90deg)'; 
+        } 
+    }
+
     function deleteAiItem(e, btn) { 
         e.stopPropagation(); 
         if (typeof Swal !== 'undefined') {
@@ -1844,160 +2015,22 @@
                     btn.closest('.item-card').remove();
                 }
             });
-        } else {
-            // Fallback for extreme cases
-            if(confirm('確定刪除此物品？')) {
-               btn.closest('.item-card').remove(); 
-            }
-        }
-    }
-    
-    function copyAiItem(e, btn) { e.stopPropagation(); const card = btn.closest('.item-card'); const clone = card.cloneNode(true); clone.querySelectorAll('input, select, textarea').forEach(input => { const originalInput = card.querySelector(`.${Array.from(input.classList).find(c => c.startsWith('inp-'))}`); if(originalInput) input.value = originalInput.value; }); updateAiItemDisplay(clone.querySelector('.inp-name')); card.parentElement.insertBefore(clone, card.nextSibling); }
-
-// ==========================================
-// [NEW] 預約處理邏輯 (使用 SweetAlert2)
-// ==========================================
-
-async function handleBooking() {
-    const btn = document.getElementById('btn-book-now');
-    
-    // [修正] 使用 await 等待使用者確認
-    const isConfirmed = await showConfirm('確定要送出預約嗎？', '系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)');
-    
-    if (!isConfirmed) return;
-
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 資料上傳中...';
-
-    try {
-        const imagesData = await prepareAllImages();
-        const guideContent = document.getElementById('guide-content').innerHTML;
-        const totalFee = document.getElementById('result-total-fee').innerText;
-        const notes = document.getElementById('final-special-notes').value;
-
-        const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
-             const outSel = card.querySelector('.move-out-select');
-             const inSel = card.querySelector('.move-in-select');
-             const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
-             
-             return {
-                name: card.querySelector('.area-name-input').value || '打包區域',
-                moveOutSelect: getTxt(outSel), 
-                moveInSelect: getTxt(inSel),   
-                items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
-                    name: row.querySelector('.item-name').innerText, 
-                    qty: row.querySelector('.val-qty').value,
-                    tags: row.querySelector('.item-tags-detail')?.innerText || '', 
-                    risk: row.querySelector('.item-risk-text')?.innerText || '',   
-                    sop: row.querySelector('.item-sop')?.innerText || ''           
-                }))
-            };
-        });
-
-        const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
-            return {
-                 name: card.querySelector('.area-name-input').value || '未命名區域',
-                 floorOut: card.querySelector('.area-out-floor-select').value,
-                 floorIn: card.querySelector('.area-in-floor-select').value,
-                 items: [] 
-            };
-        });
-
-        const payload = {
-            basic: userData.basic,           
-            locations: userData.locations,   
-            packingDetails: packingDetailsData, 
-            areas: areasData,                
-            specialNotes: notes,             
-            totalFee: totalFee,              
-            guideHtml: guideContent,         
-            images: imagesData               
-        };
-
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res.success) {
-                    btn.innerHTML = '<i class="fas fa-check"></i> 預約成功';
-                    btn.classList.remove('bg-brand-dark');
-                    btn.classList.add('bg-green-600');
-                    
-                    showMsg('🎉 預約資料已成功送出！', '確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。', 'success');
-                    
-                    document.getElementById('action-buttons').style.display = 'none';
-                    document.getElementById('btn-line-connect').classList.remove('hidden');
-                    
-                    autoSaveProgress(6, { isSent: "是 (已預約)" });
-                } else {
-                    throw new Error(res.error);
-                }
-            })
-            .withFailureHandler(err => {
-                throw err;
-            })
-            .processBooking(payload);
-
-    } catch (err) {
-        console.error(err);
-        showMsg('上傳失敗', '請重試或聯繫客服：' + err.message, 'error');
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-    }
-}
-
-// [輔助] 將所有圖片轉為 Base64 並分類
-async function prepareAllImages() {
-    const result = {
-        route: [],   
-        packing: [], 
-        item: []     
-    };
-
-    for (const cardId in cardImages) {
-        const images = cardImages[cardId];
-        for (const imgObj of images) {
-            const base64 = await fileToBase64(imgObj.file);
-            const payload = { 
-                name: imgObj.file.name, 
-                type: imgObj.file.type, 
-                base64: base64 
-            };
-
-            if (['indoor', 'path', 'park'].includes(imgObj.category)) {
-                result.route.push(payload);
-            } else if (imgObj.category === 'packing') {
-                result.packing.push(payload);
-            }
+        } else if(confirm('確定刪除此物品？')) {
+            btn.closest('.item-card').remove(); 
         }
     }
 
-    for (const [areaId, files] of areaFilesStore.entries()) {
-        for (const fileObj of files) {
-            const base64 = await fileToBase64(fileObj.file);
-            result.item.push({
-                name: fileObj.file.name,
-                type: fileObj.file.type,
-                base64: base64
-            });
-        }
+    function copyAiItem(e, btn) { 
+        e.stopPropagation(); 
+        const card = btn.closest('.item-card'); 
+        const clone = card.cloneNode(true); 
+        clone.querySelectorAll('input, select, textarea').forEach(input => { 
+            const originalInput = card.querySelector(`.${Array.from(input.classList).find(c => c.startsWith('inp-'))}`); 
+            if(originalInput) input.value = originalInput.value; 
+        }); 
+        updateAiItemDisplay(clone.querySelector('.inp-name')); 
+        card.parentElement.insertBefore(clone, card.nextSibling); 
     }
-
-    return result;
-}
-
-// [輔助] 單一檔案轉 Base64 Promise
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const result = reader.result;
-            const base64 = result.split(',')[1];
-            resolve(base64);
-        };
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-    });
-}
 
 </script>
 </html>
