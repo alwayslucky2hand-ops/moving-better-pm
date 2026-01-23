@@ -767,8 +767,9 @@
     // 0. [核心] SweetAlert2 輔助函式
     // ==========================================
     
-    // 顯示訊息 (取代 alert)
-    function showMsg(title, text = '', icon = 'info') {
+    function showMsg(title, text, icon) {
+        text = text || '';
+        icon = icon || 'info';
         if (typeof Swal !== 'undefined') {
             return Swal.fire({
                 title: title,
@@ -779,17 +780,13 @@
                 heightAuto: false
             });
         } else {
-            console.log(`[${icon}] ${title}: ${text}`);
-            const msg = document.createElement('div');
-            msg.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:9999;text-align:center;";
-            msg.innerHTML = `<strong>${title}</strong><br>${text}`;
-            document.body.appendChild(msg);
-            setTimeout(() => msg.remove(), 3000);
+            console.log('[' + icon + '] ' + title + ': ' + text);
+            alert(title + '\n' + text);
         }
     }
 
-    // 顯示確認框 (取代 confirm)
-    async function showConfirm(title, text = '') {
+    async function showConfirm(title, text) {
+        text = text || '';
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
                 title: title,
@@ -804,21 +801,21 @@
             });
             return result.isConfirmed;
         }
-        return true; 
+        return confirm(title + '\n' + text);
     }
 
     // ==========================================
     // 1. 全域變數與初始化
     // ==========================================
-    let currentStep = 0;
-    const userData = { basic: {}, locations: [], packing: {}, areas: [], notes: '', quoteResult: null };
-    let locCounts = { out: 0, in: 0 };
-    let cardImages = {}; 
-    let locationOptions = { out: [], in: [] }; 
-    let areaFilesStore = new Map();
-    let signaturePad = { canvas: null, ctx: null, isDrawing: false };
+    var currentStep = 0;
+    var userData = { basic: {}, locations: [], packing: {}, areas: [], notes: '', quoteResult: null };
+    var locCounts = { out: 0, in: 0 };
+    var cardImages = {}; 
+    var locationOptions = { out: [], in: [] }; 
+    var areaFilesStore = new Map();
+    var signaturePad = { canvas: null, ctx: null, isDrawing: false };
 
-    // 台灣行政區資料
+    // 台灣行政區資料 (保持原樣，為節省空間此處略過，請保留原本的 TAIWAN_DATA)
     const TAIWAN_DATA = { 
         "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
         "臺北市": ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"],
@@ -843,14 +840,6 @@
         "金門縣": ["金沙鎮", "金湖鎮", "金寧鄉", "金城鎮", "烈嶼鄉", "烏坵鄉"],
         "連江縣": ["南竿鄉", "北竿鄉", "莒光鄉", "東引鄉"]
     };
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const dateInput = document.getElementById('input-date');
-      if(dateInput) dateInput.min = new Date().toISOString().split('T')[0];
-      loadFromStorage();
-      addLocation('out'); addLocation('in');
-      addPackingArea(); addAreaCard();
-    });
 
     // 2. 頁面導航與驗證
     function nextStep() { 
@@ -918,7 +907,7 @@
     }
       
     function goToStep(step) { 
-        const targetEl = document.getElementById(`step-${step}`);
+        const targetEl = document.getElementById('step-' + step);
         if (targetEl) { targetEl.classList.add('active'); targetEl.style.display = 'block'; setTimeout(() => targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }
         currentStep = step; 
         const step5 = document.getElementById('step-5');
@@ -953,8 +942,14 @@
             const inLocId = card.querySelector('.area-move-in-select').value;
             let rawOutFloor = card.querySelector('.area-out-floor-select').value;
             let rawInFloor = card.querySelector('.area-in-floor-select').value;
-            if (locMap.get(outLocId)?.hasElevator) rawOutFloor = 'E' + rawOutFloor;
-            if (locMap.get(inLocId)?.hasElevator) rawInFloor = 'E' + rawInFloor;
+            
+            // 安全檢查：修正 ?. 用法
+            const outLoc = locMap.get(outLocId);
+            if (outLoc && outLoc.hasElevator) rawOutFloor = 'E' + rawOutFloor;
+            
+            const inLoc = locMap.get(inLocId);
+            if (inLoc && inLoc.hasElevator) rawInFloor = 'E' + rawInFloor;
+
             return {
                 name: card.querySelector('.area-name-input').value,
                 moveOutFloor: rawOutFloor, moveInFloor: rawInFloor,
@@ -995,41 +990,41 @@
 
     function showEstimationResult(res, request) {
         document.getElementById('main-footer').style.display = 'block'; 
-        document.getElementById('result-total-fee').innerText = `$ ${res.totalFee.toLocaleString()}`;
-        document.getElementById('result-trucks').innerText = `${res.baseTrucks} 台3.5噸貨車`;
-        document.getElementById('result-manpower').innerText = `${res.baseManpower}~${res.baseManpower+1} 位搬運師`;
-        document.getElementById('result-hours').innerText = `${res.baseHours}~${res.baseHours+2} 小時`;
+        document.getElementById('result-total-fee').innerText = '$ ' + res.totalFee.toLocaleString();
+        document.getElementById('result-trucks').innerText = res.baseTrucks + ' 台3.5噸貨車';
+        document.getElementById('result-manpower').innerText = res.baseManpower + '~' + (res.baseManpower+1) + ' 位搬運師';
+        document.getElementById('result-hours').innerText = res.baseHours + '~' + (res.baseHours+2) + ' 小時';
 
         const c = res.costs;
-        const getItemCountsString = (counts) => { let parts = []; ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"].forEach(t => { if (counts[t] > 0) parts.push(`${t} ${counts[t]}件`); }); return parts.length > 0 ? `(${parts.join(' + ')})` : ''; };
-        const getDisassemblyCountsString = (counts) => { let parts = []; ["簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"].forEach(t => { if (counts[t] > 0) parts.push(`${t} ${counts[t]}件`); }); return parts.length > 0 ? `(${parts.join(' + ')})` : ''; };
+        const getItemCountsString = (counts) => { let parts = []; ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"].forEach(t => { if (counts[t] > 0) parts.push(t + ' ' + counts[t] + '件'); }); return parts.length > 0 ? '(' + parts.join(' + ') + ')' : ''; };
+        const getDisassemblyCountsString = (counts) => { let parts = []; ["簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"].forEach(t => { if (counts[t] > 0) parts.push(t + ' ' + counts[t] + '件'); }); return parts.length > 0 ? '(' + parts.join(' + ') + ')' : ''; };
 
         document.getElementById('desc-base-fee').innerText = getItemCountsString(res.itemCounts);
-        document.getElementById('cost-base-fee').innerText = `$ ${c.baseFee.toLocaleString()}`;
+        document.getElementById('cost-base-fee').innerText = '$ ' + c.baseFee.toLocaleString();
         document.getElementById('desc-stair-fee').innerText = getItemCountsString(res.stairItemCounts);
-        document.getElementById('cost-stair-fee').innerText = `$ ${c.stairFee.toLocaleString()}`;
+        document.getElementById('cost-stair-fee').innerText = '$ ' + c.stairFee.toLocaleString();
         
         let totalSpecialItems = 0; 
         request.locations.forEach(loc => { totalSpecialItems += (parseInt(loc.specialStairs)||0) + (parseInt(loc.specialDistance)||0) + (parseInt(loc.specialTransfer)||0); });
-        document.getElementById('desc-special-route-fee').innerText = (totalSpecialItems > 0) ? `($ 1,000 x ${totalSpecialItems} 項 x ${res.baseTrucks} 車)` : '';
-        document.getElementById('cost-special-route-fee').innerText = `$ ${c.specialRouteFee.toLocaleString()}`;
+        document.getElementById('desc-special-route-fee').innerText = (totalSpecialItems > 0) ? '($ 1,000 x ' + totalSpecialItems + ' 項 x ' + res.baseTrucks + ' 車)' : '';
+        document.getElementById('cost-special-route-fee').innerText = '$ ' + c.specialRouteFee.toLocaleString();
 
         document.getElementById('desc-disassembly-fee').innerText = getDisassemblyCountsString(res.disassemblyItemCounts);
-        document.getElementById('cost-disassembly-fee').innerText = `$ ${c.disassemblyFee.toLocaleString()}`;
+        document.getElementById('cost-disassembly-fee').innerText = '$ ' + c.disassemblyFee.toLocaleString();
 
-        document.getElementById('desc-inter-city-fee').innerText = (res.interCityMoves > 0) ? `($ 2,000 x 跨 ${res.interCityMoves} 縣市 x ${res.baseTrucks} 車)` : '';
-        document.getElementById('cost-inter-city-fee').innerText = `$ ${c.interCityFee.toLocaleString()}`;
+        document.getElementById('desc-inter-city-fee').innerText = (res.interCityMoves > 0) ? '($ 2,000 x 跨 ' + res.interCityMoves + ' 縣市 x ' + res.baseTrucks + ' 車)' : '';
+        document.getElementById('cost-inter-city-fee').innerText = '$ ' + c.interCityFee.toLocaleString();
 
         let totalCraneHours = 0; request.locations.forEach(loc => { totalCraneHours += (parseInt(loc.specialCrane)||0); });
-        document.getElementById('desc-crane-fee').innerText = (totalCraneHours > 0) ? `(${totalCraneHours} 小時吊車時數)` : '';
-        document.getElementById('cost-crane-fee').innerText = `$ ${c.craneFee.toLocaleString()}`;
+        document.getElementById('desc-crane-fee').innerText = (totalCraneHours > 0) ? '(' + totalCraneHours + ' 小時吊車時數)' : '';
+        document.getElementById('cost-crane-fee').innerText = '$ ' + c.craneFee.toLocaleString();
 
         const s = request.services;
-        document.getElementById('desc-packing-fee').innerText = (parseInt(s.packingBoxes) > 0 || parseInt(s.bubbleWrap) > 0) ? `(紙箱 ${s.packingBoxes} 個 + 氣泡布 ${s.bubbleWrap} 捲)` : '';
-        document.getElementById('cost-packing-fee').innerText = `$ ${c.packingFee.toLocaleString()}`;
+        document.getElementById('desc-packing-fee').innerText = (parseInt(s.packingBoxes) > 0 || parseInt(s.bubbleWrap) > 0) ? '(紙箱 ' + s.packingBoxes + ' 個 + 氣泡布 ' + s.bubbleWrap + ' 捲)' : '';
+        document.getElementById('cost-packing-fee').innerText = '$ ' + c.packingFee.toLocaleString();
 
-        document.getElementById('desc-organizing-fee').innerText = (parseInt(s.preMovePacking) > 0 || parseInt(s.postMoveUnpacking) > 0) ? `(打包 ${s.preMovePacking} 件 + 上架 ${s.postMoveUnpacking} 件)` : '';
-        document.getElementById('cost-organizing-fee').innerText = `$ ${c.organizingFee.toLocaleString()}`;
+        document.getElementById('desc-organizing-fee').innerText = (parseInt(s.preMovePacking) > 0 || parseInt(s.postMoveUnpacking) > 0) ? '(打包 ' + s.preMovePacking + ' 件 + 上架 ' + s.postMoveUnpacking + ' 件)' : '';
+        document.getElementById('cost-organizing-fee').innerText = '$ ' + c.organizingFee.toLocaleString();
 
         document.getElementById('result-view-notes').innerText = res.specialNotes || "(無)";
         renderReminders(res, request);
@@ -1078,11 +1073,20 @@
         });
 
         const packingData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
+            // 安全修正 ?. usage
+            let tags = '';
+            const tagEl = card.querySelector('.item-tags-detail');
+            if (tagEl) tags = tagEl.innerText;
+
+            let risk = '';
+            const riskEl = card.querySelector('.item-risk-text');
+            if (riskEl) risk = riskEl.innerText;
+
             return {
                 name: card.querySelector('.area-name-input').value || '打包區域',
                 items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
                     name: row.querySelector('.item-name').innerText, qty: row.querySelector('.val-qty').value,
-                    tags: row.querySelector('.item-tags-detail')?.innerText || '', risk: row.querySelector('.item-risk-text')?.innerText || ''
+                    tags: tags, risk: risk
                 }))
             };
         });
@@ -1115,13 +1119,23 @@
             .generateMovingGuide(fullData); 
     }
 
-    // 4. 自動儲存進度
-    function autoSaveProgress(currentStepIndex, extraData = {}) {
+    // 4. 自動儲存進度 (已修正 Critical Bug)
+    function autoSaveProgress(currentStepIndex, extraData) {
+        extraData = extraData || {};
         const basicInfo = JSON.parse(localStorage.getItem('ayue_user_info') || '{}');
         if (!basicInfo.email) return;
 
         const step1Text = formatStep1ToText(); const step2Text = formatStep2ToText(); const step3Text = formatStep3ToText(); const step5Text = formatStep5ToText();
-        let step6Text = extraData.guideHtml ? formatDomToText(document.createElement('div').innerHTML = extraData.guideHtml) : formatStep6ToText();
+        
+        // 修正：分開建立 DOM 元素，避免 formatDomToText 接收錯誤的型別
+        let step6Text = "";
+        if (extraData.guideHtml) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = extraData.guideHtml;
+            step6Text = formatDomToText(tempDiv);
+        } else {
+            step6Text = formatStep6ToText();
+        }
 
         const payload = {
             email: basicInfo.email, name: basicInfo.name, type: basicInfo.type, moveDate: basicInfo.date, referrer: basicInfo.referrer,
@@ -1131,7 +1145,12 @@
         google.script.run.withFailureHandler(err => console.log("AutoSave Failed:", err)).logUserProgress(payload);
     }
 
+    function formatStep5ToText() {
+        return document.getElementById('result-total-fee') ? document.getElementById('result-total-fee').innerText : '$ 0';
+    }
+
     function formatStep6ToText() { const container = document.getElementById('guide-content'); return (!container || container.innerHTML.trim() === '') ? "" : formatDomToText(container); }
+    
     function formatDomToText(container) {
         const clone = container.cloneNode(true);
         clone.querySelectorAll('h1, h2, h3, h4, .timeline-title, .phase-title').forEach(el => el.textContent = `\n【${el.textContent.trim()}】\n`);
@@ -1141,8 +1160,8 @@
         clone.querySelectorAll('p').forEach(el => el.textContent = `${el.textContent.trim()}\n`);
         return clone.innerText.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
     }
-    
-    // 排版 Helpers (完整展開)
+     
+    // 排版 Helpers
     function formatStep1ToText() { 
         if (!userData.locations || userData.locations.length === 0) return "(尚未設定地點)";
         return userData.locations.map((l, idx) => {
@@ -1187,11 +1206,14 @@
                 report += `  (無物品)\n`;
             } else {
                 items.forEach((item, i) => {
-                    const itemName = item.querySelector('.item-name')?.innerText || "";
+                    // 安全修正 ?. usage
+                    let itemName = "", tags = "", tools = "", sop = "";
+                    const nameEl = item.querySelector('.item-name'); if(nameEl) itemName = nameEl.innerText;
+                    const tagEl = item.querySelector('.item-tags-detail'); if(tagEl) tags = tagEl.innerText;
+                    const toolEl = item.querySelector('.item-materials'); if(toolEl) tools = toolEl.innerText || "無";
+                    const sopEl = item.querySelector('.item-sop'); if(sopEl) sop = sopEl.innerText || "無";
+
                     const qty = item.querySelector('.val-qty')?.value || 1;
-                    const tags = item.querySelector('.item-tags-detail')?.innerText || "";
-                    const tools = item.querySelector('.item-materials')?.innerText || "無";
-                    let sop = item.querySelector('.item-sop')?.innerText || "無";
                     sop = sop.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
                     report += `  ${i+1}. ${itemName} (x${qty})\n      • 標籤: ${tags}\n      • 工具: ${tools}\n      • SOP: ${sop}\n`; 
                 });
@@ -1222,7 +1244,10 @@
                 report += `  (無物品)\n`;
             } else {
                 items.forEach((item, i) => {
-                    const itemName = item.querySelector('.item-name')?.innerText || "";
+                    // 安全修正 ?. usage
+                    let itemName = "";
+                    const nameEl = item.querySelector('.item-name'); if(nameEl) itemName = nameEl.innerText;
+                    
                     const qty = item.querySelector('.inp-qty')?.value || 1;
                     const diff = item.querySelector('.inp-difficulty')?.value || "";
                     const dis = item.querySelector('.inp-disassembly')?.value || "";
@@ -1270,7 +1295,6 @@
             const totalFee = document.getElementById('result-total-fee').innerText;
             const notes = document.getElementById('final-special-notes').value;
 
-            // 抓取詳細資料 (略縮與上方 handleBooking 邏輯一致)
             const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
                 const outSel = card.querySelector('.move-out-select');
                 const inSel = card.querySelector('.move-in-select');
@@ -1295,7 +1319,7 @@
 
             const payload = {
                 basic: userData.basic, locations: userData.locations, packingDetails: packingDetailsData, areas: areasData,                
-                specialNotes: notes, totalFee: totalFee, guideHtml: guideContent, images: imagesData               
+                specialNotes: notes, totalFee: totalFee, guideHtml: guideContent, images: imagesData                
             };
 
             google.script.run
@@ -1313,7 +1337,7 @@
         } catch (err) { console.error(err); showMsg('上傳失敗', '請重試或聯繫客服：' + err.message, 'error'); btn.disabled = false; btn.innerHTML = originalText; }
     }
 
-    // 7. 圖片處理 (省略細節，邏輯同前)
+    // 7. 圖片處理
     async function prepareAllImages() {
         const result = { route: [], packing: [], item: [] };
         for (const cardId in cardImages) {
@@ -1333,11 +1357,11 @@
         return result;
     }
     function fileToBase64(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result.split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); }); }
-    
+     
     // ==========================================
-    // UI Helpers (完整展開版)
+    // UI Helpers
     // ==========================================
-    
+     
     function selectType(val, el) { 
         if(!el) return; 
         document.querySelectorAll('.option-card').forEach(c => { 
@@ -1372,13 +1396,28 @@
         return Math.ceil((new Date(dateStr)-today)/(86400000)); 
     }
 
-    function getStep0Data() { 
-        return { 
-            name: document.getElementById('input-name').value, 
-            date: document.getElementById('input-date').value, 
-            type: document.getElementById('input-type').value, 
-            email: document.getElementById('input-email').value 
-        }; 
+    function getStep1Data() { 
+        if (!document.getElementById('out-list')) return [];
+        const outs = Array.from(document.querySelectorAll('#out-list .location-card')).map(card => parseLocationCard(card));
+        const ins = Array.from(document.querySelectorAll('#in-list .location-card')).map(card => parseLocationCard(card));
+        return [...outs, ...ins];
+    }
+    
+    function parseLocationCard(card) {
+        return {
+            id: card.dataset.id,
+            type: card.dataset.type,
+            city: card.querySelector('.city-select').value,
+            area: card.querySelector('.dist-select').value,
+            addr: card.querySelector('.addr-input').value,
+            hasElevator: card.dataset.hasElev === 'true',
+            floor: card.dataset.hasElev === 'true' ? card.querySelector('.floor-input-val').value : card.querySelector('.floor-btn-val').value,
+            floorType: card.dataset.hasElev === 'true' ? 'yes' : 'no',
+            pushUnits: card.querySelector('.dist-input').value,
+            stairsCount: card.querySelector('.stairs-input').value,
+            transferCount: card.querySelector('.transfer-input').value,
+            craneHours: card.querySelector('.crane-input').value
+        };
     }
 
     function loadFromStorage() { 
@@ -1465,7 +1504,9 @@
             reader.onload = e => { 
                 const div = document.createElement('div'); 
                 div.className = 'photo-thumbnail group relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-200'; 
-                div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="photo-delete absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer" onclick="removePhoto(this, '${cid}', '${f.name}')">×</div>`; 
+                // 修正：避免單引號衝突
+                const fileNameSafe = f.name.replace(/'/g, "\\'");
+                div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="photo-delete absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer" onclick="removePhoto(this, '${cid}', '${fileNameSafe}')">×</div>`; 
                 container.insertBefore(div, input.parentElement); 
             }; 
             reader.readAsDataURL(f); 
@@ -1623,7 +1664,7 @@
             newCard.id = newId; 
             newCard.querySelector('.area-name-input').value += " (複製)"; 
             newCard.querySelector('.photo-scroll-container').id = `container-${newId}`; 
-            newCard.querySelector('.photo-scroll-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handlePackingPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-teal transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; 
+            newCard.querySelector('.photo-scroll-container').innerHTML = `<label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handlePackingPhoto(this, '${newId}')"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-teal transition"></i><span class="text-[10px] text-gray-400">新增</span></label>`; 
             newCard.querySelector('.item-list').innerHTML = ''; 
             document.getElementById('packing-area-list').appendChild(newCard); 
         } else { 
@@ -1657,13 +1698,16 @@
     function handlePackingPhoto(input, cid) { 
         if(!input.files.length) return; 
         const container = input.parentElement.parentElement; 
+        if(!cardImages[cid]) cardImages[cid] = [];
         Array.from(input.files).forEach(file => { 
             cardImages[cid].push({ file: file, category: 'packing' }); 
             const reader = new FileReader(); 
             reader.onload = e => { 
                 const div = document.createElement('div'); 
                 div.className = 'photo-thumbnail flex-shrink-0 w-20 h-20 rounded-xl relative overflow-hidden border border-gray-200'; 
-                div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="absolute top-1 right-1 bg-black/50 text-white w-5 h-5 rounded-full flex items-center justify-center cursor-pointer text-xs" onclick="removePhoto(this, '${cid}', '${file.name}')">×</div>`; 
+                // 安全修正單引號
+                const safeName = file.name.replace(/'/g, "\\'");
+                div.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"><div class="absolute top-1 right-1 bg-black/50 text-white w-5 h-5 rounded-full flex items-center justify-center cursor-pointer text-xs" onclick="removePhoto(this, '${cid}', '${safeName}')">×</div>`; 
                 container.insertBefore(div, input.parentElement); 
             }; 
             reader.readAsDataURL(file); 
@@ -1785,7 +1829,7 @@
         if (document.getElementById('service-unpack').checked) fee += totalBoxes * 600; 
         fee += boxCount * 50; 
         fee += bubbleCount * 500; 
-        document.getElementById('step2-total').innerText = `$ ${fee.toLocaleString()}`; 
+        document.getElementById('step2-total').innerText = '$ ' + fee.toLocaleString(); 
         userData.packing = { totalBoxes, fee }; 
     }
 
@@ -1920,7 +1964,12 @@
                 const match = line.match(/(.+) \* (\d+)/); 
                 const name = match ? match[1].trim() : line; 
                 const qty = match ? match[2].trim() : '1'; 
-                const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; 
+                
+                // 安全修正 ?. usage
+                let attrs = [];
+                const matches = nextLine.match(/【.*?】/g);
+                if (matches) attrs = matches.map(s => s.replace(/[【】]/g, ''));
+                
                 let type='', mat='', diff='', dis=''; 
                 const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; 
                 const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; 
@@ -2025,12 +2074,26 @@
         const card = btn.closest('.item-card'); 
         const clone = card.cloneNode(true); 
         clone.querySelectorAll('input, select, textarea').forEach(input => { 
-            const originalInput = card.querySelector(`.${Array.from(input.classList).find(c => c.startsWith('inp-'))}`); 
-            if(originalInput) input.value = originalInput.value; 
+            const classList = Array.from(input.classList);
+            const targetClass = classList.find(c => c.startsWith('inp-'));
+            if(targetClass) {
+                const originalInput = card.querySelector(`.${targetClass}`); 
+                if(originalInput) input.value = originalInput.value; 
+            }
         }); 
         updateAiItemDisplay(clone.querySelector('.inp-name')); 
         card.parentElement.insertBefore(clone, card.nextSibling); 
     }
 
+    // 啟動點：放在最後確保所有函式都已定義
+    document.addEventListener('DOMContentLoaded', () => {
+      const dateInput = document.getElementById('input-date');
+      if(dateInput) dateInput.min = new Date().toISOString().split('T')[0];
+      loadFromStorage();
+      addLocation('out'); addLocation('in');
+      addPackingArea(); addAreaCard();
+    });
+
 </script>
+
 </html>
