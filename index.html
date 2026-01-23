@@ -562,44 +562,63 @@
     // ==========================================
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyIVhaX_3VxMpYDRJgj2t8445nbhvCg10EAP-M1SIe5etXZKn52Kqas-dpDsjv92ei84Q/exec";
 
-    // 通用 API 呼叫函式 (取代 google.script.run)
-// 通用 API 呼叫函式 (改良版：增加除錯功能)
+// 強韌版 API 呼叫函式 (配合後端 Text/Plain 策略)
     async function callBackendAPI(action, data = {}) {
-        // 檢查 URL 是否設定
-        if (GAS_API_URL.includes("你的_DEPLOYMENT_ID")) {
-            alert("請先在程式碼中設定 GAS_API_URL！");
-            throw new Error("API URL尚未設定");
+        if (!GAS_API_URL || GAS_API_URL.includes("你的_DEPLOYMENT_ID")) {
+            alert("請先設定正確的 GAS_API_URL！");
+            throw new Error("API URL 未設定");
         }
 
+        // 建構標準 Payload
+        const payload = JSON.stringify({ action: action, ...data });
+
         try {
+            // 使用 fetch 發送請求
             const response = await fetch(GAS_API_URL, {
                 method: "POST",
-                // Google Apps Script Web App 使用 text/plain 避免 CORS 預檢 (Preflight)
+                // 【關鍵】使用 text/plain，避免觸發複雜的 CORS Preflight (OPTIONS)
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({ action: action, ...data }),
+                body: payload,
+                // 【關鍵】設定 redirect 為 follow，確保自動跟隨 GAS 的 302 跳轉
+                redirect: "follow"
             });
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
-            // --- 修改重點開始：先讀取文字，再嘗試轉 JSON ---
-            const textResult = await response.text(); // 先把回應當純文字讀出來
-            
+
+            // 先讀取純文字
+            const textResult = await response.text();
+
+            // 嘗試解析 JSON
             try {
-                const jsonResult = JSON.parse(textResult); // 嘗試解析成 JSON
+                const jsonResult = JSON.parse(textResult);
+                
+                // 檢查是否有應用層級的錯誤
+                if (jsonResult && jsonResult.error) {
+                    console.error("後端執行錯誤:", jsonResult.error);
+                    // 這裡可以選擇是否要 alert，或者直接回傳讓外層處理
+                    return jsonResult; 
+                }
+                
                 return jsonResult;
+
             } catch (e) {
-                // 如果解析失敗，代表後端回傳的不是 JSON (通常是 Google 的 HTML 錯誤頁面)
-                console.error("❌ 後端回傳了非 JSON 的內容:", textResult);
-                alert("系統連線異常！\n後端回傳了錯誤網頁，請查看 Console (F12) 獲取詳細內容。");
-                throw new Error("後端回傳格式錯誤 (由 HTML 造成解析失敗)");
+                // 如果解析失敗，通常是因為 Google 回傳了 HTML 登入頁面
+                console.error("JSON 解析失敗，原始回應:", textResult);
+                
+                // 這裡是一個「多重帳號登入」的常見 Bug 提示
+                if (textResult.includes("<!DOCTYPE html>") || textResult.includes("Google Accounts")) {
+                    alert("⚠️ 系統偵測到帳號衝突！\n\nGoogle 安全機制擋住了連線。\n請嘗試：\n1. 使用「無痕視窗」開啟此網頁。\n2. 或登出瀏覽器中其他的 Google 帳號。");
+                } else {
+                    alert("資料傳輸異常，請稍後再試。");
+                }
+                throw new Error("API 回應非有效 JSON");
             }
-            // --- 修改重點結束 ---
 
         } catch (error) {
-            console.error("API 連線錯誤:", error);
-            // 這裡不再 alert，因為上面已經 alert 過了，或是由外部 catch 處理
+            console.error("網路連線層級錯誤:", error);
+            // 這裡不再 alert，因為上面的 try-catch 已經處理過了
             throw error;
         }
     }
