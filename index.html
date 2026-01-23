@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>搬家帥岳-搬家規劃書系統</title>
@@ -27,48 +26,25 @@
   </script>
 
 <style>
-    /* =========================================
-       1. 基礎設定
-       ========================================= */
+    /* 1. 基礎設定 */
     body { background-color: #FDFBF5; color: #2A2A2A; -webkit-font-smoothing: antialiased; padding-bottom: 80px; }
-      
     details > summary { list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
-    details > summary::marker { display: none; }
-
-    /* =========================================
-       2. 步驟區塊與動畫
-       ========================================= */
-    .step-section { 
-        display: none; 
-        opacity: 0; 
-        scroll-margin-top: 100px; 
-        transition: opacity 0.5s ease-in-out;
-    }
     
-    .step-section.active { 
-        display: block; 
-        animation: slideUpFade 0.5s forwards; 
-    }
+    /* 2. 步驟區塊動畫 */
+    .step-section { display: none; opacity: 0; scroll-margin-top: 100px; transition: opacity 0.5s ease-in-out; }
+    .step-section.active { display: block; animation: slideUpFade 0.5s forwards; }
+    @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    @keyframes slideUpFade { 
-        from { opacity: 0; transform: translateY(20px); } 
-        to { opacity: 1; transform: translateY(0); } 
-    }
-
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* =========================================
-       3. UI 元件
-       ========================================= */
+    /* 3. UI 元件 */
     .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.03); margin-bottom: 16px; position: relative; }
     .input-field, .select-field, textarea { width: 100%; padding: 12px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px; font-size: 15px; outline: none; transition: all 0.2s; }
     .input-field:focus, .select-field:focus, textarea:focus { border-color: #FDB813; background-color: #FFF; ring: 2px solid #FDB813; }
     textarea { resize: vertical; min-height: 80px; }
-      
+    
     .btn-main { background: #2A2A2A; color: white; font-weight: 700; border-radius: 50px; padding: 16px; width: 100%; box-shadow: 0 10px 20px -5px rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; cursor: pointer; }
     .btn-main:active { transform: scale(0.98); }
-    .btn-main:disabled { background: #ccc; cursor: not-allowed; box-shadow: none; }
+    .btn-main:disabled { background: #ccc; cursor: not-allowed; }
 
     .option-card { border: 2px solid transparent; transition: all 0.2s; cursor: pointer; }
     .option-card.selected { border-color: #FDB813; background-color: #FFFDF5; }
@@ -79,17 +55,16 @@
     .floor-btn { background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 10px 0; text-align: center; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all 0.2s; user-select: none; }
     .floor-btn.selected { background-color: #2A2A2A; color: white; border-color: #2A2A2A; font-weight: 700; transform: scale(1.05); }
 
-    /* 照片上傳區 */
+    /* 照片上傳 */
     .photo-scroll-container { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
-    .photo-scroll-container::-webkit-scrollbar { display: none; }
-    .add-photo-btn { flex-shrink: 0; width: 80px; height: 80px; border: 2px dashed #CBD5E1; border-radius: 12px; background: #F8FAFC; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: #94A3B8; transition: all 0.2s; }
+    .add-photo-btn { flex-shrink: 0; width: 80px; height: 80px; border: 2px dashed #CBD5E1; border-radius: 12px; background: #F8FAFC; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: #94A3B8; }
     .photo-thumbnail { flex-shrink: 0; width: 80px; height: 80px; border-radius: 12px; position: relative; overflow: hidden; border: 1px solid #E2E8F0; }
     .photo-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
-    .btn-delete-img { position: absolute; top: -6px; right: -6px; background: #64748B; color: white; border-radius: 50%; width: 22px; height: 22px; line-height: 20px; text-align: center; font-size: 14px; font-weight: bold; cursor: pointer; z-index: 10; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; }
+    .btn-delete-img { position: absolute; top: -6px; right: -6px; background: #64748B; color: white; border-radius: 50%; width: 22px; height: 22px; line-height: 20px; text-align: center; font-size: 14px; font-weight: bold; cursor: pointer; z-index: 10; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
     /* 動態卡片 */
     .dynamic-card { border: 1px solid #FDB813; border-radius: 12px; margin-top: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.03); overflow: hidden; position: relative; transition: all 0.3s ease; }
-    .card-header { position: relative; padding: 18px 50px 18px 45px; cursor: pointer; background: #FFF8E1; border-bottom: 1px solid #FDB813; transition: background-color 0.2s; }
+    .card-header { position: relative; padding: 18px 50px 18px 45px; cursor: pointer; background: #FFF8E1; border-bottom: 1px solid #FDB813; }
     .card-body { padding: 20px; animation: slideDown 0.3s ease-out; }
     .card-body.collapsed { display: none; }
     .toggle-icon { position: absolute; left: 20px; top: 50%; transform: translateY(-50%) rotate(0deg); transition: transform 0.3s; font-size: 16px; color: #5A6573; }
@@ -97,341 +72,76 @@
     @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
     .card-actions { position: absolute; top: 50%; right: 15px; transform: translateY(-50%); display: flex; gap: 8px; }
-    .btn-card-action { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9CA3AF; transition: all 0.2s; background: rgba(255,255,255,0.8); border: 1px solid transparent; }
+    .btn-card-action { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9CA3AF; background: rgba(255,255,255,0.8); border: 1px solid transparent; cursor: pointer; }
     .btn-card-action:hover { background: #FFF; border-color: #E5E7EB; color: #4B5563; }
     .btn-card-action.delete:hover { color: #EF4444; background: #FEF2F2; border-color: #FECACA; }
 
     /* 物品卡片 */
     .item-card { border: 1px solid #E5E7EB; background: #fff; border-radius: 12px; margin-top: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: all 0.2s; }
-    .item-header { padding: 14px 16px; background: #F9FAFB; cursor: pointer; position: relative; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid transparent; transition: all 0.2s; }
+    .item-header { padding: 14px 16px; background: #F9FAFB; cursor: pointer; position: relative; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid transparent; }
     .item-card.active .item-header { background: #F9FAFB; border-bottom: 1px solid #E5E7EB; }
     .item-body { padding: 20px; background: #FFFFFF; display: none; }
     .item-body.active { display: block; animation: slideDown 0.2s ease-out; }
-
     .item-title-block { margin-bottom: 6px; }
     .item-name { font-size: 15px; font-weight: 700; color: #1F2937; margin-right: 4px; }
     .item-qty { font-size: 16px; font-weight: 800; color: #1F2937; } 
     .item-tags-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .tag-std { background-color: #FFFFFF; border: 1px solid #E5E7EB; color: #6B7280; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; display: inline-block; }
-    .tag-highlight { background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; }
-
+    .tag-std { background-color: #FFFFFF; border: 1px solid #E5E7EB; color: #6B7280; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; }
+    .tag-highlight { background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
     .item-risk-bar { padding: 10px 14px; font-size: 12px; line-height: 1.5; font-weight: 700; display: flex; align-items: center; border-top: 1px solid rgba(0,0,0,0.05); }
     .risk-bg-red { background-color: #FEF2F2; color: #B91C1C; border-left: 4px solid #EF4444; } 
     .risk-bg-orange { background-color: #FFF7ED; color: #C2410C; border-left: 4px solid #F97316; } 
     .risk-bg-green { background-color: #F0FDF4; color: #15803D; border-left: 4px solid #22C55E; } 
-
     .item-arrow-icon { font-size: 14px; color: #9CA3AF; transition: transform 0.3s; margin-right: 10px; margin-top: 4px; }
     .item-card.active .item-arrow-icon { transform: rotate(90deg); color: #FDB813; }
     .item-actions { display: flex; gap: 6px; }
-    .btn-icon-sm { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9CA3AF; transition: all 0.2s; background: #FFF; border: 1px solid #E5E7EB; }
+    .btn-icon-sm { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9CA3AF; background: #FFF; border: 1px solid #E5E7EB; cursor: pointer; }
     .btn-icon-sm:hover { background: #F3F4F6; color: #4B5563; }
     .btn-icon-sm.delete:hover { background: #FEE2E2; color: #EF4444; border-color: #FECACA; }
 
-    /* [按鈕 Loading 樣式] */
+    /* 按鈕 Loading */
     .btn-loading { pointer-events: none; opacity: 0.8; cursor: wait; }
     .btn-loading i { animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* === 結果頁樣式 === */
+    /* 結果與明細 */
     .result-total-card { text-align: center; border: 2px solid #FDB813; background: #FFFDF5; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
     .result-amount { font-size: 48px; font-weight: 800; color: #2A2A2A; margin: 10px 0; }
     .result-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-top: 15px; border-top: 1px solid #E5E7EB; }
     .result-summary-item label { font-size: 12px; color: #9CA3AF; display: block; margin-bottom: 2px; }
     .result-summary-item span { font-size: 16px; font-weight: 700; color: #2A2A2A; }
-
     .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #F3F4F6; font-size: 15px; }
     .breakdown-row:last-child { border-bottom: none; }
     .breakdown-label { font-weight: 700; color: #374151; }
     .breakdown-desc { font-size: 12px; color: #9CA3AF; flex: 1; text-align: right; margin: 0 10px; }
     .breakdown-val { font-weight: 800; color: #1F2937; }
-
+    
+    /* 提醒與條款 */
     .reminder-list { list-style: none; padding: 0; margin: 0; }
     .reminder-item { position: relative; padding-left: 26px; margin-bottom: 10px; font-size: 14px; line-height: 1.6; color: #4B5563; }
-    .reminder-item.critical { color: #B91C1C; font-weight: 700; }
-    .reminder-item.critical::before { content: '🛑'; position: absolute; left: 0; top: 1px; }
-    .reminder-item.warning { color: #C2410C; font-weight: 700; }
-    .reminder-item.warning::before { content: '⚠️'; position: absolute; left: 0; top: 1px; }
-    .reminder-item.info { color: #0277BD; }
-    .reminder-item.info::before { content: '💡'; position: absolute; left: 0; top: 1px; }
-    .reminder-item.check { color: #15803D; }
-    .reminder-item.check::before { content: '✅'; position: absolute; left: 0; top: 1px; }
-
-    /* === [NEW] 指南頁面擴充樣式 === */
-    /* 時間軸樣式 */
-    .timeline-container { position: relative; padding-left: 24px; border-left: 2px solid #E5E7EB; margin-left: 12px; margin-top: 20px; }
-    .timeline-item { position: relative; margin-bottom: 30px; }
-    .timeline-item:last-child { margin-bottom: 0; }
-    .timeline-dot { position: absolute; left: -31px; top: 0; width: 16px; height: 16px; border-radius: 50%; background: #FFF; border: 3px solid #FDB813; z-index: 10; }
-    .timeline-title { font-weight: 700; color: #2A2A2A; font-size: 16px; margin-bottom: 8px; }
-    .timeline-content { background: #F9FAFB; border-radius: 12px; padding: 15px; border: 1px solid #F3F4F6; }
-      
-    /* 5W2H 標籤 */
-    .tag-5w2h { display: inline-block; font-size: 10px; background: #2A2A2A; color: white; padding: 2px 6px; border-radius: 4px; margin-right: 5px; font-weight: bold; }
-
-    /* 約定條款區 */
     .terms-box { background: #FFFDF5; border: 1px solid #FDB813; padding: 20px; border-radius: 12px; font-size: 13px; line-height: 1.8; color: #4B5563; max-height: 1200px; overflow-y: auto; text-align: justify; }
     .terms-box h4 { color: #2A2A2A; font-weight: 700; margin-bottom: 10px; font-size: 15px; }
     .terms-box ol { list-style-type: decimal; padding-left: 20px; margin-bottom: 15px; }
     .terms-box li { margin-bottom: 8px; }
     .terms-highlight { background: #FCE7A2; padding: 0 4px; border-radius: 2px; font-weight: bold; color: #000; }
-
+    
     /* 簽名區 */
     .signature-area { background: white; border: 2px dashed #CBD5E1; border-radius: 12px; position: relative; height: 180px; width: 100%; margin-top: 10px; touch-action: none; }
     .signature-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #CBD5E1; pointer-events: none; font-size: 20px; font-weight: bold; }
     #signature-canvas { width: 100%; height: 100%; cursor: crosshair; }
 
-    /* === [NEW] 賈伯斯級指南樣式優化 === */
-
-    /* 1. 報價儀表板 (Dashboard) */
-    .quote-dashboard {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 15px;
-        margin-bottom: 20px;
+    /* 列印樣式 */
+    @media print {
+        button, header, footer, #step-6-footer, .add-photo-btn, .btn-delete-img, .fixed, #progress-bar, .no-print { display: none !important; }
+        body, .container, .main-content { width: 100% !important; margin: 0 !important; padding: 0 !important; background: white !important; color: black !important; overflow: visible !important; }
+        .step-section, .card-body, .item-body { display: block !important; opacity: 1 !important; height: auto !important; visibility: visible !important; overflow: visible !important; max-height: none !important; }
+        .card-collapsed-info { display: none !important; }
+        .terms-box, #guide-content { max-height: none !important; overflow: visible !important; border: none !important; }
+        input, textarea, select { border: none !important; background: transparent !important; resize: none !important; padding: 0 !important; font-weight: bold !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
+        select::-ms-expand { display: none; }
+        .card, .step-section, h3, h4 { break-inside: avoid; page-break-inside: avoid; }
     }
-    .quote-metric-card {
-        background: white;
-        border: 1px solid #E5E7EB;
-        border-radius: 16px;
-        padding: 15px;
-        text-align: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        transition: all 0.2s;
-    }
-    .quote-metric-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-    .quote-metric-label { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
-    .quote-metric-value { font-size: 20px; font-weight: 800; color: #2A2A2A; }
-    .quote-metric-value.highlight { color: #D97706; font-size: 24px; } /* 總金額特別色 */
-
-    /* 2. 美化表格 (Table) */
-    .fancy-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
-    .fancy-table th { text-align: left; padding: 12px 15px; color: #6B7280; font-weight: 600; border-bottom: 2px solid #F3F4F6; font-size: 12px; }
-    .fancy-table td { padding: 12px 15px; border-bottom: 1px solid #F3F4F6; color: #374151; vertical-align: middle; }
-    .fancy-table tr:last-child td { border-bottom: none; }
-    .fancy-table tr:hover td { background-color: #F9FAFB; }
-    .fancy-table .amount-col { text-align: right; font-weight: 700; font-family: monospace; font-size: 15px; }
-    .fancy-table .icon-col { width: 30px; text-align: center; color: #9CA3AF; }
-
-    /* 3. 現代化時間軸 (Modern Timeline) */
-    .modern-timeline { position: relative; padding-left: 0; }
-    .modern-timeline::before {
-        content: '';
-        position: absolute;
-        top: 15px;
-        bottom: 0;
-        left: 24px; /* 線條位置 */
-        width: 2px;
-        background: #E5E7EB;
-        z-index: 0;
-    }
-      
-    .timeline-phase {
-        position: relative;
-        margin-bottom: 40px;
-        z-index: 1;
-    }
-      
-    /* 階段標題球 */
-    .phase-badge {
-        display: flex;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-    .phase-dot {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        background: #2A2A2A;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 18px;
-        border: 4px solid #FFF;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        z-index: 2;
-        flex-shrink: 0;
-    }
-    .phase-content {
-        margin-left: 15px;
-    }
-    .phase-title { font-size: 18px; font-weight: 800; color: #111827; }
-    .phase-desc { font-size: 13px; color: #6B7280; }
-
-    /* 任務卡片群組 */
-    .task-group {
-        margin-left: 25px; /* 對齊線條右側 */
-        padding-left: 25px;
-    }
-      
-    .task-card {
-        background: white;
-        border: 1px solid #F3F4F6;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        position: relative;
-        transition: transform 0.2s;
-    }
-    .task-card:hover { transform: translateX(5px); border-color: #FDB813; }
-      
-    /* 連接線的小圓點 */
-    .task-card::before {
-        content: '';
-        position: absolute;
-        left: -30px; /* 連到主線 */
-        top: 24px;
-        width: 10px;
-        height: 10px;
-        background: white;
-        border: 2px solid #D1D5DB;
-        border-radius: 50%;
-        z-index: 2;
-    }
-    .task-card.checked::before { background: #10B981; border-color: #10B981; }
-
-    /* 任務標題與勾選 */
-    .task-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
-    .checkbox-custom {
-        width: 22px;
-        height: 22px;
-        border: 2px solid #D1D5DB;
-        border-radius: 6px;
-        flex-shrink: 0;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        transition: all 0.2s;
-    }
-    .checkbox-custom.checked { background: #10B981; border-color: #10B981; }
-      
-    .task-title { font-weight: 700; color: #374151; font-size: 15px; line-height: 1.4; flex: 1; }
-    .task-5w2h-box {
-        background: #F9FAFB;
-        border-radius: 8px;
-        padding: 10px 12px;
-        font-size: 13px;
-        color: #4B5563;
-        margin-top: 8px;
-        margin-left: 34px; /* 對齊文字 */
-        border-left: 3px solid #FDB813;
-        line-height: 1.6;
-    }
-    .highlight-label { font-weight: 700; color: #111827; margin-right: 4px; }
-
-    /* 手機版適配 */
-    @media (max-width: 480px) {
-        .quote-dashboard { grid-template-columns: 1fr; gap: 10px; }
-        .phase-dot { width: 40px; height: 40px; font-size: 16px; }
-        .modern-timeline::before { left: 19px; }
-    }
-
-
-    /* === [NEW] 物品清單與 SOP 表格樣式 === */
-      
-    /* 物品清單表格 */
-    .inventory-table { width: 100%; font-size: 13px; border-collapse: separate; border-spacing: 0; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
-    .inventory-table th { background: #F3F4F6; color: #4B5563; font-weight: 700; padding: 10px; text-align: left; border-bottom: 1px solid #E5E7EB; }
-    .inventory-table td { padding: 10px; border-bottom: 1px solid #F3F4F6; color: #1F2937; vertical-align: top; }
-    .inventory-table tr:last-child td { border-bottom: none; }
-    .inventory-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; margin-bottom: 2px; font-weight: 500; }
-    .tag-risk { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
-    .tag-cate { background: #F0F9FF; color: #0369A1; border: 1px solid #BAE6FD; }
-
-    /* SOP 每日計畫表 */
-    .sop-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    .sop-table th { background: #2A2A2A; color: white; padding: 12px; text-align: left; font-size: 14px; }
-    .sop-table td { border: 1px solid #E5E7EB; padding: 12px; font-size: 14px; vertical-align: top; }
-    .sop-time { font-weight: 700; color: #D97706; white-space: nowrap; }
-    .sop-action { font-weight: 700; color: #111827; display: block; margin-bottom: 4px; }
-    .sop-detail { font-size: 13px; color: #6B7280; line-height: 1.5; }
-    .sop-check { width: 30px; text-align: center; }
-
-    /* Step 6 特殊樣式：隱藏 Step 5 的操作區 */
-    .step-5-readonly .card:last-child { display: none; } /* 假設最後一個 card 是備註下面的按鈕區，若不是請用 id 控制 */
-    .step-5-readonly #btn-next, .step-5-readonly #btn-prev { display: none; } /* 隱藏 footer */
-
-
-/* =========================================
-   [列印專用樣式] 1:1 原樣輸出 (按 Ctrl+P 時生效)
-   ========================================= */
-@media print {
-    /* 1. 隱藏不該出現的 UI */
-    button, 
-    header, 
-    footer, 
-    #step-6-footer, 
-    .add-photo-btn, 
-    .btn-delete-img, 
-    .fixed, 
-    #progress-bar,
-    .no-print {
-        display: none !important;
-    }
-
-    /* 2. 重置容器寬度，確保滿版 */
-    body, .container, .main-content {
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: white !important;
-        color: black !important;
-        overflow: visible !important;
-    }
-
-    /* 3. 強制展開所有步驟與卡片 */
-    .step-section, 
-    .card-body, 
-    .item-body {
-        display: block !important;
-        opacity: 1 !important;
-        height: auto !important;
-        visibility: visible !important;
-        overflow: visible !important;
-        max-height: none !important;
-    }
-
-    /* 4. 隱藏「收合時」的提示文字 */
-    .card-collapsed-info {
-        display: none !important;
-    }
-
-    /* 5. 展開長捲軸內容 (條款、指南) */
-    .terms-box, 
-    #guide-content {
-        max-height: none !important;
-        overflow: visible !important;
-        border: none !important; /* 列印時去除邊框比較好看 */
-    }
-
-    /* 6. 輸入框優化 (移除邊框，看起來像純文字) */
-    input, textarea, select {
-        border: none !important;
-        background: transparent !important;
-        resize: none !important;
-        padding: 0 !important;
-        font-weight: bold !important;
-        color: #000 !important;
-        -webkit-appearance: none;
-        appearance: none;
-    }
-    
-    /* 隱藏下拉選單的小箭頭 */
-    select::-ms-expand { display: none; }
-    
-    /* 7. 確保分頁不斷在奇怪的地方 (如標題) */
-    .card, .step-section, h3, h4 {
-        break-inside: avoid;
-        page-break-inside: avoid;
-    }
-}
 </style>
-
-
 </head>
 
 <body class="min-h-screen flex flex-col pb-28">
@@ -454,12 +164,12 @@
             <div><label class="block text-sm font-bold text-gray-700 mb-2">2. Email </label><input type="email" id="input-email" class="input-field" placeholder="name@example.com"></div>
             
             <div class="bg-yellow-50 p-3 rounded-xl border border-yellow-200">
-   <label class="block text-sm font-bold text-gray-700 mb-2">3. 推薦人/會員代碼 (必填)</label>
-   <p class="text-xs text-gray-500 mb-2">請輸入您或推薦人的專屬會員代碼以啟用服務。</p>
-   <div class="flex gap-2">
-      <input type="text" id="input-referrer" class="input-field" placeholder="請輸入會員代碼">
-   </div>
-</div>
+               <label class="block text-sm font-bold text-gray-700 mb-2">3. 推薦人/會員代碼 (必填)</label>
+               <p class="text-xs text-gray-500 mb-2">請輸入您或推薦人的專屬會員代碼以啟用服務。</p>
+               <div class="flex gap-2">
+                  <input type="text" id="input-referrer" class="input-field" placeholder="請輸入會員代碼">
+               </div>
+            </div>
 
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-3">4. 這次需要搬什麼？</label>
@@ -493,13 +203,8 @@
             <div class="text-blue-500 text-xl"><i class="fas fa-box-open"></i></div>
             <div class="text-xs text-blue-800 leading-relaxed"><strong>整理師阿岳：</strong><br>請新增並拍攝您需要打包的區域（如：主臥衣櫃、書架）。<br>AI 會幫您估算紙箱數並提供打包建議。</div>
           </div>
-            
           <div id="packing-area-list"></div>
-
-          <button onclick="addPackingArea()" class="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 font-bold hover:border-brand-teal hover:text-brand-teal transition mb-6 flex items-center justify-center">
-            <i class="fas fa-plus mr-2"></i> 新增打包區域
-          </button>
-
+          <button onclick="addPackingArea()" class="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 font-bold hover:border-brand-teal hover:text-brand-teal transition mb-6 flex items-center justify-center"><i class="fas fa-plus mr-2"></i> 新增打包區域</button>
           <div class="card bg-white border border-gray-200 shadow-sm">
             <h4 class="font-bold text-brand-dark mb-4 text-sm flex items-center gap-2"><i class="fas fa-cart-plus text-brand-yellow"></i> 加值服務選擇</h4>
             <div class="space-y-4 mb-6">
@@ -514,14 +219,8 @@
             </div>
             <h4 class="font-bold text-brand-dark mb-3 text-sm flex items-center gap-2"><i class="fas fa-box text-brand-yellow"></i> 需添購包材</h4>
             <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                 <div><label class="text-sm font-bold text-gray-600">搬家用紙箱</label><div class="text-[10px] text-gray-400">54x40x36cm | $50/個</div></div>
-                 <div class="flex items-center gap-2"><input type="number" id="material-box" class="w-16 border rounded-lg p-2 text-center text-sm focus:border-brand-yellow outline-none" placeholder="0" min="0" onchange="calcStep2Total()"><span class="text-xs text-gray-500">個</span></div>
-              </div>
-              <div class="flex items-center justify-between">
-                 <div><label class="text-sm font-bold text-gray-600">氣泡布</label><div class="text-[10px] text-gray-400">規格：30cm x 50m | $500/捲</div></div>
-                 <div class="flex items-center gap-2"><input type="number" id="material-bubble" class="w-16 border rounded-lg p-2 text-center text-sm focus:border-brand-yellow outline-none" placeholder="0" min="0" onchange="calcStep2Total()"><span class="text-xs text-gray-500">捲</span></div>
-              </div>
+              <div class="flex items-center justify-between"><div><label class="text-sm font-bold text-gray-600">搬家用紙箱</label><div class="text-[10px] text-gray-400">54x40x36cm | $50/個</div></div><div class="flex items-center gap-2"><input type="number" id="material-box" class="w-16 border rounded-lg p-2 text-center text-sm focus:border-brand-yellow outline-none" placeholder="0" min="0" onchange="calcStep2Total()"><span class="text-xs text-gray-500">個</span></div></div>
+              <div class="flex items-center justify-between"><div><label class="text-sm font-bold text-gray-600">氣泡布</label><div class="text-[10px] text-gray-400">規格：30cm x 50m | $500/捲</div></div><div class="flex items-center gap-2"><input type="number" id="material-bubble" class="w-16 border rounded-lg p-2 text-center text-sm focus:border-brand-yellow outline-none" placeholder="0" min="0" onchange="calcStep2Total()"><span class="text-xs text-gray-500">捲</span></div></div>
             </div>
           </div>
           <div class="text-right mt-4 pr-2"><span class="text-xs text-gray-400">此步驟預估費用</span><div class="text-3xl font-extrabold text-brand-dark mt-1" id="step2-total">$ 0</div></div>
@@ -532,16 +231,9 @@
              <div class="text-brand-yellow text-xl"><i class="fas fa-couch"></i></div>
              <div class="text-xs text-yellow-800 leading-relaxed"><strong>搬家阿岳：</strong><br>請新增區域（如：客廳、主臥），並拍攝該區所有傢俱。<br>AI 會自動列出清單並分析拆裝需求與風險。</div>
            </div>
-
            <div id="area-list-container"></div>
-
-           <button onclick="addAreaCard()" class="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 font-bold hover:border-brand-primary hover:text-brand-primary transition mb-3 flex items-center justify-center">
-             <i class="fas fa-plus mr-2"></i> 新增一個區域 (例如: 臥室)
-           </button>
-           
-           <button id="undo-area-btn" onclick="undoDeleteArea()" class="text-xs text-gray-400 text-center w-full hover:text-gray-600" disabled>
-             <i class="fas fa-undo"></i> 還原剛刪除的區域
-           </button>
+           <button onclick="addAreaCard()" class="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 font-bold hover:border-brand-primary hover:text-brand-primary transition mb-3 flex items-center justify-center"><i class="fas fa-plus mr-2"></i> 新增一個區域 (例如: 臥室)</button>
+           <button id="undo-area-btn" onclick="undoDeleteArea()" class="text-xs text-gray-400 text-center w-full hover:text-gray-600" disabled><i class="fas fa-undo"></i> 還原剛刪除的區域</button>
         </div>
 
         <div id="step-4" class="step-section">
@@ -550,7 +242,6 @@
               <p class="text-xs text-gray-400 mb-4">任何需要我們額外注意的事項 (例如：易碎品特別多、需要借用紙箱...)</p>
               <textarea id="final-special-notes" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-brand-yellow outline-none" rows="5" placeholder="請填寫備註..."></textarea>
            </div>
-           
            <div class="text-center mt-6 mb-4">
              <p class="text-gray-500 text-sm mb-2">準備好產生估價單了嗎？</p>
              <div class="text-xs text-gray-400">點擊「產生估價單」後，系統將計算費用並產生文件</div>
@@ -567,7 +258,6 @@
                     <div class="result-summary-item"> <label>預估工時</label> <span id="result-hours">-</span> </div>
                 </div>
             </div>
-
             <div class="card">
                 <h3 class="font-bold text-lg mb-2 text-brand-dark border-l-4 border-brand-yellow pl-3">費用明細</h3>
                 <p class="text-xs text-gray-400 mb-4">透明的價格，讓您最安心。</p>
@@ -582,12 +272,10 @@
                     <div class="breakdown-row"> <span class="breakdown-label">整理費用</span> <span id="desc-organizing-fee" class="breakdown-desc"></span> <span id="cost-organizing-fee" class="breakdown-val">$ 0</span> </div>
                 </div>
             </div>
-            
             <div class="card" style="border-left: 5px solid #FDB813;">
                 <h3 class="font-bold text-lg mb-2 text-brand-dark">🔔 搬家大岳的貼心提醒</h3>
                 <div id="reminder-content"></div>
             </div>
-
             <div class="card">
                 <h3 class="font-bold text-lg mb-2 text-brand-dark border-l-4 border-brand-yellow pl-3">備註</h3>
                 <p id="result-view-notes" class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg"></p>
@@ -596,13 +284,10 @@
 
         <div id="step-6" class="step-section pb-20">
             <div class="text-center py-6 px-4 bg-white border-b border-gray-100 sticky top-0 z-30 shadow-sm">
-                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-brand-yellow/10 text-brand-yellow mb-2">
-                    <i class="fas fa-clipboard-check text-xl"></i>
-                </div>
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-brand-yellow/10 text-brand-yellow mb-2"><i class="fas fa-clipboard-check text-xl"></i></div>
                 <h2 class="text-xl font-bold text-brand-dark">把家搬好好黃金指南</h2>
                 <p class="text-xs text-gray-500">阿岳為您量身打造的行動清單</p>
             </div>
-
             <div id="guide-loading" class="hidden flex flex-col items-center justify-center py-20">
                 <div class="relative w-20 h-20">
                     <div class="absolute top-0 left-0 w-full h-full border-4 border-gray-100 rounded-full"></div>
@@ -612,10 +297,7 @@
                 <div class="mt-4 text-sm font-bold text-gray-600">正在客制化撰寫搬家指南...</div>
                 <div class="text-xs text-gray-400 mt-1">分析資料中</div>
             </div>
-
-            <div id="guide-content" class="max-w-2xl mx-auto px-4 py-6 space-y-8">
-                </div>
-
+            <div id="guide-content" class="max-w-2xl mx-auto px-4 py-6 space-y-8"></div>
             <div class="max-w-2xl mx-auto px-4 pb-6">
                 <div class="terms-box mb-6">
                     <h4 class="text-center border-b pb-2 mb-3 border-yellow-200">搬運契約書約定事項</h4>
@@ -636,7 +318,6 @@
                         <div class="text-gray-400 text-[10px]">請確認帳號無誤後再行匯款</div>
                     </div>
                 </div>
-
                 <div class="card">
                     <h3 class="font-bold text-lg mb-2 text-brand-dark">✍️ 客戶簽名</h3>
                     <p class="text-xs text-gray-400 mb-2">請在此區域簽名以確認契約內容</p>
@@ -647,23 +328,16 @@
                     </div>
                 </div>
             </div>
-
-
-<div id="step-6-footer" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-50 flex flex-col gap-3 max-w-md mx-auto no-print">
-    <div id="action-buttons" class="flex gap-3">
-        <button onclick="prevStep()" class="w-1/3 py-3 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 text-sm shadow-sm">
-            <i class="fas fa-edit"></i> 上一步修改
-        </button>
-        <button id="btn-book-now" onclick="handleBooking()" class="flex-1 py-3 bg-brand-dark text-white rounded-xl font-bold hover:bg-gray-800 text-sm shadow-lg flex items-center justify-center gap-2">
-            <i class="fas fa-paper-plane"></i> 確認預約並發送資料
-        </button>
+            
+            <div id="step-6-footer" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-50 flex flex-col gap-3 max-w-md mx-auto no-print">
+                <div id="action-buttons" class="flex gap-3">
+                    <button onclick="prevStep()" class="w-1/3 py-3 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 text-sm shadow-sm"><i class="fas fa-edit"></i> 上一步修改</button>
+                    <button id="btn-book-now" onclick="handleBooking()" class="flex-1 py-3 bg-brand-dark text-white rounded-xl font-bold hover:bg-gray-800 text-sm shadow-lg flex items-center justify-center gap-2"><i class="fas fa-paper-plane"></i> 確認預約並發送資料</button>
+                </div>
+                <a id="btn-line-connect" href="https://line.me/R/ti/p/@movingbetter" target="_blank" class="hidden w-full py-4 bg-[#06C755] text-white rounded-xl font-bold hover:bg-[#05b64d] text-base shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 animate-pulse"><i class="fab fa-line text-2xl"></i> 資料已傳送！點此前往 LINE 官方帳號</a>
+            </div>
+        </div>
     </div>
-
-    <a id="btn-line-connect" href="https://line.me/R/ti/p/@movingbetter" target="_blank" class="hidden w-full py-4 bg-[#06C755] text-white rounded-xl font-bold hover:bg-[#05b64d] text-base shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 animate-pulse">
-        <i class="fab fa-line text-2xl"></i> 資料已傳送！點此前往 LINE 官方帳號
-    </a>
-</div>
-
   </main>
 
   <footer id="main-footer" class="fixed bottom-0 left-0 right-0 p-5 bg-white/95 backdrop-blur border-t border-gray-100 z-50 shadow-lg">
@@ -742,13 +416,11 @@
       <div class="px-6 py-2 text-xs text-gray-400 card-collapsed-info hidden border-b border-gray-100 bg-gray-50/50">
         <span class="info-text">尚未設定路線 (點擊展開設定)</span>
       </div>
-
       <div class="card-body hidden">
         <div class="mb-4">
            <label class="block text-xs font-bold mb-1 text-gray-500">區域名稱</label>
            <input type="text" class="area-name-input input-field py-2 w-full bg-gray-50 border border-gray-200 rounded-lg" value="新區域" oninput="updateCardTitle(this)">
         </div>
-
         <div class="bg-brand-teal/5 p-3 rounded-lg border border-brand-teal/10 mb-3">
            <div class="flex items-center mb-2"><span class="bg-brand-teal text-white text-[10px] px-2 py-0.5 rounded-full font-bold mr-2">FROM</span><span class="text-xs font-bold text-gray-600">搬出設定</span></div>
            <div class="grid grid-cols-2 gap-2">
@@ -756,7 +428,6 @@
              <div><label class="text-[10px] text-gray-400 block mb-1">樓層</label><select class="select-field py-1 w-full text-sm move-out-floor-select" onchange="updateCollapsedInfo(this)"><option value="">(先選地點)</option></select></div>
            </div>
         </div>
-
         <div class="bg-brand-yellow/5 p-3 rounded-lg border border-brand-yellow/10 mb-4">
            <div class="flex items-center mb-2"><span class="bg-brand-yellow text-white text-[10px] px-2 py-0.5 rounded-full font-bold mr-2">TO</span><span class="text-xs font-bold text-gray-600">搬入設定</span></div>
            <div class="grid grid-cols-2 gap-2">
@@ -764,64 +435,11 @@
              <div><label class="text-[10px] text-gray-400 block mb-1">樓層</label><select class="select-field py-1 w-full text-sm move-in-floor-select" onchange="updateCollapsedInfo(this)"><option value="">(先選地點)</option></select></div>
            </div>
         </div>
-
         <div class="mb-4 border-t border-dashed border-gray-200 pt-4">
           <div class="photo-scroll-container" id="container-packing"><label class="add-photo-btn group"><input type="file" class="hidden" accept="image/*" multiple onchange="handlePackingPhoto(this)"><i class="fas fa-camera text-xl mb-1 group-hover:text-brand-teal transition"></i><span class="text-[10px] text-gray-400">新增</span></label></div>
         </div>
-        <button class="w-full py-2 bg-brand-teal/10 text-brand-teal font-bold rounded-lg border border-brand-teal hover:bg-brand-teal hover:text-white transition btn-ai-action" onclick="runPackingAnalysis(this)">
-            <i class="fas fa-magic"></i> <span>AI 盤點雜物</span>
-        </button>
+        <button class="w-full py-2 bg-brand-teal/10 text-brand-teal font-bold rounded-lg border border-brand-teal hover:bg-brand-teal hover:text-white transition btn-ai-action" onclick="runPackingAnalysis(this)"><i class="fas fa-magic"></i> <span>AI 盤點雜物</span></button>
         <div class="item-list mt-4 space-y-3 hidden"></div>
-      </div>
-    </div>
-  </template>
-
-  <template id="tpl-packing-item">
-    <div class="item-card relative group border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm mt-3">
-      <div class="item-header flex justify-between items-center p-4 bg-gray-50 cursor-pointer border-b border-gray-100 hover:bg-gray-100 transition" onclick="toggleItem(this)">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 flex items-center justify-center">
-            <i class="toggle-icon-item fas fa-chevron-right text-gray-400 text-sm transition-transform duration-300"></i>
-          </div>
-          <div class="font-bold text-gray-800 text-base">
-            <span class="item-name"></span> 
-            <span class="text-gray-400 mx-2">x</span> 
-            <span class="item-qty text-brand-teal font-extrabold text-xl"></span>
-          </div>
-        </div>
-        <div class="item-actions">
-            <button class="btn-icon-sm copy" onclick="copyAiItem(event, this)"><i class="fas fa-copy"></i></button>
-            <button class="btn-icon-sm delete" onclick="removeItem(event, this)"><i class="fas fa-trash-alt"></i></button>
-        </div>
-        <input type="hidden" class="val-qty">
-      </div>
-        
-      <div class="item-body p-5 bg-white hidden">
-        <div class="mb-4 p-3 bg-gray-100 rounded-lg">
-           <div class="item-tags-detail text-xs text-gray-600 font-medium leading-relaxed space-y-1"></div>
-        </div>
-        <div class="mb-4">
-          <div class="inline-flex items-center gap-1 bg-brand-yellow/10 px-2 py-1 rounded mb-2">
-             <span class="text-xs font-bold text-brand-yellow">📦 準備工具</span>
-          </div>
-          <div class="item-materials text-sm text-gray-700 font-bold pl-1"></div>
-        </div>
-        <div class="mb-4">
-           <div class="inline-flex items-center gap-1 bg-brand-teal/10 px-2 py-1 rounded mb-2">
-             <span class="text-xs font-bold text-brand-teal">📝 整理師 SOP</span>
-           </div>
-           <div class="item-sop text-sm text-gray-600 leading-relaxed space-y-2 pl-1"></div>
-        </div>
-        <div class="space-y-2">
-           <div class="item-risk hidden text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 flex items-start gap-2">
-             <i class="fas fa-exclamation-triangle mt-0.5 flex-shrink-0"></i>
-             <span class="item-risk-text font-bold"></span>
-           </div>
-           <div class="item-summary hidden text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-200 flex items-start gap-2">
-             <i class="fas fa-info-circle mt-0.5 text-gray-400 flex-shrink-0"></i>
-             <span class="item-summary-text"></span>
-           </div>
-        </div>
       </div>
     </div>
   </template>
@@ -840,13 +458,11 @@
       <div class="px-6 py-2 text-xs text-gray-400 card-collapsed-info hidden border-b border-gray-100 bg-gray-50/50">
         <span class="info-text">尚未設定路線 (點擊展開設定)</span>
       </div>
-
       <div class="card-body hidden">
         <div class="mb-4">
            <label class="block text-xs font-bold mb-1 text-gray-500">區域名稱</label>
            <input type="text" class="area-name-input input-field py-2 w-full bg-gray-50 border border-gray-200 rounded-lg" value="新區域" oninput="updateCardTitle(this)">
         </div>
-
         <div class="grid grid-cols-2 gap-3 mb-4">
           <div class="bg-gray-50 p-2 rounded-lg border border-gray-200">
             <span class="bg-brand-teal text-white text-[10px] px-2 py-0.5 rounded-full font-bold mb-1 inline-block">FROM</span> <span class="text-xs font-bold text-gray-600">搬出設定</span>
@@ -855,7 +471,6 @@
                <div><label class="text-[10px] text-gray-400 block mb-1">樓層</label><select class="select-field py-1 w-full text-sm area-out-floor-select" onchange="updateAreaSummaryText(this)"><option value="">(先選地點)</option></select></div>
             </div>
           </div>
-
           <div class="bg-gray-50 p-2 rounded-lg border border-gray-200">
             <span class="bg-brand-yellow text-white text-[10px] px-2 py-0.5 rounded-full font-bold mb-1 inline-block">TO</span> <span class="text-xs font-bold text-gray-600">搬入設定</span>
             <div class="mt-2 space-y-2">
@@ -864,7 +479,6 @@
             </div>
           </div>
         </div>
-
         <div class="mb-4 border-t border-dashed border-gray-200 pt-4">
           <div class="photo-scroll-container area-photo-container">
              <label class="add-photo-btn group">
@@ -874,11 +488,9 @@
              </label>
           </div>
         </div>
-
         <button class="w-full py-3 bg-brand-primary/10 text-brand-dark font-bold rounded-lg border border-brand-primary hover:bg-brand-primary hover:text-white transition btn-recognize btn-ai-action" onclick="runAreaRecognition(this)">
           <i class="fas fa-magic mr-1"></i> <span>開始辨識搬運物</span>
         </button>
-
         <div class="item-list mt-4 space-y-3 hidden"></div>
       </div>
     </div>
@@ -895,8 +507,7 @@
                   <span class="text-xs text-gray-400 mx-1">x</span>
                   <span class="item-qty">1</span>
                </div>
-               <div class="item-tags-row">
-                  </div>
+               <div class="item-tags-row"></div>
             </div>
          </div>
          <div class="item-actions">
@@ -904,7 +515,6 @@
             <button class="btn-icon-sm delete" onclick="deleteAiItem(event, this)"><i class="fas fa-times"></i></button>
          </div>
       </div>
-
       <div class="item-body">
          <div class="space-y-4">
             <div><label class="text-xs font-bold text-gray-500 block mb-1">名稱</label><input type="text" class="input-field py-2 inp-name" oninput="updateAiItemDisplay(this)"></div>
@@ -941,12 +551,10 @@
             </div>
          </div>
       </div>
-
-      <div class="item-risk-bar hidden">
-         </div>
+      <div class="item-risk-bar hidden"></div>
     </div>
   </template>
-</body>
+
 <script>
     // ==========================================
     // 【重要】GitHub Pages 專用設定
@@ -1053,7 +661,10 @@
             
             try {
                 // 呼叫後端檢查 checkReferrerCode (改用 callBackendAPI)
-                const isValid = await callBackendAPI('checkReferrerCode', { referrer: referrer });
+                const res = await callBackendAPI('checkReferrerCode', { referrer: referrer });
+                // 後端回傳的是 { valid: true/false } (請確認 GAS 端是否已修改為回傳物件)
+                // 如果後端還是直接回傳 true/false，則使用 const isValid = res;
+                const isValid = (typeof res === 'object' && res.valid !== undefined) ? res.valid : res;
 
                 setBtnLoading(btnNext, false);
                 document.getElementById('btn-text-main').innerText = originalText;
