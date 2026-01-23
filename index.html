@@ -350,7 +350,7 @@
     </div>
   </footer>
 
-  <template id="tpl-location-card">
+<template id="tpl-location-card">
     <div class="card location-card relative" data-type="" data-id="">
       <button class="absolute top-3 right-3 text-gray-300 hover:text-red-500 p-2" onclick="removeLocation(this)"><i class="fas fa-times"></i></button>
       <div class="mb-4"><span class="badge-type text-xs font-bold px-3 py-1 rounded-full text-white bg-gray-400 shadow-sm">地點 1</span></div>
@@ -497,54 +497,51 @@
   </template>
 
   <template id="tpl-packing-item">
-    <div class="item-card relative group bg-white shadow-sm mt-3 border border-gray-200 rounded-xl overflow-hidden">
-      <div class="item-header flex justify-between items-start p-3 cursor-pointer bg-gray-50 hover:bg-gray-100 transition" onclick="toggleItem(this)">
-         <div class="flex items-start flex-1 gap-2">
-            <i class="toggle-icon-item fas fa-chevron-right mt-1 text-gray-400 transition-transform duration-300"></i>
-            <div>
-               <div class="flex items-center gap-2">
-                  <span class="item-name font-bold text-gray-800 text-sm">物品名稱</span>
-                  <span class="text-xs text-gray-400">x</span>
-                  <span class="item-qty font-bold text-brand-dark">1</span>
-               </div>
-               <div class="item-tags-detail text-[10px] text-gray-500 mt-1 bg-white border border-gray-200 px-2 py-0.5 rounded-full inline-block"></div>
-            </div>
-         </div>
-         <div class="flex items-center gap-2" onclick="event.stopPropagation()">
-            <input type="number" class="val-qty w-12 h-8 border border-gray-300 rounded text-center text-sm focus:border-brand-teal outline-none" value="1" min="1" onchange="calcStep2Total()">
-            <button class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition" onclick="removeItem(event, this)">
-               <i class="fas fa-times"></i>
-            </button>
-         </div>
+    <div class="item-card relative group border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm mt-3">
+      <div class="item-header flex justify-between items-center p-4 bg-gray-50 cursor-pointer border-b border-gray-100 hover:bg-gray-100 transition" onclick="toggleItem(this)">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 flex items-center justify-center">
+            <i class="toggle-icon-item fas fa-chevron-right text-gray-400 text-sm transition-transform duration-300"></i>
+          </div>
+          <div class="font-bold text-gray-800 text-base">
+            <span class="item-name"></span> 
+            <span class="text-gray-400 mx-2">x</span> 
+            <span class="item-qty text-brand-teal font-extrabold text-xl"></span>
+          </div>
+        </div>
+        <div class="item-actions">
+            <button class="btn-icon-sm copy" onclick="copyAiItem(event, this)"><i class="fas fa-copy"></i></button>
+            <button class="btn-icon-sm delete" onclick="removeItem(event, this)"><i class="fas fa-trash-alt"></i></button>
+        </div>
+        <input type="hidden" class="val-qty">
       </div>
-
-      <div class="item-body hidden bg-white p-4 border-t border-gray-100">
-         
-         <div class="mb-4">
-            <label class="flex items-center gap-2 text-[11px] font-bold text-brand-teal uppercase mb-2">
-               <i class="fas fa-clipboard-list"></i> 整理師 SOP 指引
-            </label>
-            <div class="item-sop text-xs text-gray-600 leading-relaxed space-y-1 bg-teal-50/30 p-3 rounded-lg border border-teal-100">
-               </div>
-         </div>
-
-         <div class="mb-3">
-            <label class="flex items-center gap-2 text-[11px] font-bold text-gray-500 uppercase mb-1">
-               <i class="fas fa-box-open"></i> 建議包材與工具
-            </label>
-            <div class="item-materials text-xs text-gray-600 bg-gray-50 p-2 rounded"></div>
-         </div>
-
-         <div class="item-risk hidden mb-2 bg-red-50 border-l-4 border-red-400 p-2 rounded-r">
-            <div class="flex items-start gap-2">
-               <i class="fas fa-exclamation-triangle text-red-500 mt-0.5 text-xs"></i>
-               <span class="item-risk-text text-xs text-red-700 font-bold"></span>
-            </div>
-         </div>
-
-         <div class="item-summary hidden bg-yellow-50 p-2 rounded text-center">
-            <div class="item-summary-text text-xs text-yellow-800 italic"></div>
-         </div>
+        
+      <div class="item-body p-5 bg-white hidden">
+        <div class="mb-4 p-3 bg-gray-100 rounded-lg">
+           <div class="item-tags-detail text-xs text-gray-600 font-medium leading-relaxed space-y-1"></div>
+        </div>
+        <div class="mb-4">
+          <div class="inline-flex items-center gap-1 bg-brand-yellow/10 px-2 py-1 rounded mb-2">
+             <span class="text-xs font-bold text-brand-yellow">📦 準備工具</span>
+          </div>
+          <div class="item-materials text-sm text-gray-700 font-bold pl-1"></div>
+        </div>
+        <div class="mb-4">
+           <div class="inline-flex items-center gap-1 bg-brand-teal/10 px-2 py-1 rounded mb-2">
+             <span class="text-xs font-bold text-brand-teal">📝 整理師 SOP</span>
+           </div>
+           <div class="item-sop text-sm text-gray-600 leading-relaxed space-y-2 pl-1"></div>
+        </div>
+        <div class="space-y-2">
+           <div class="item-risk hidden text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 flex items-start gap-2">
+             <i class="fas fa-exclamation-triangle mt-0.5 flex-shrink-0"></i>
+             <span class="item-risk-text font-bold"></span>
+           </div>
+           <div class="item-summary hidden text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-200 flex items-start gap-2">
+             <i class="fas fa-info-circle mt-0.5 text-gray-400 flex-shrink-0"></i>
+             <span class="item-summary-text"></span>
+           </div>
+        </div>
       </div>
     </div>
   </template>
@@ -580,21 +577,21 @@
                <div>
                   <label class="text-xs font-bold text-gray-500 block mb-1">搬運難易度</label>
                   <select class="select-field py-2 inp-difficulty" onchange="updateAiItemDisplay(this)">
-                     <option value="一人可搬">一人可搬</option>
-                     <option value="二人可搬">二人可搬</option>
-                     <option value="一人技術搬">一人技術搬</option>
-                     <option value="二人技術搬">二人技術搬</option>
-                     <option value="特殊技法搬">特殊技法搬</option>
+                      <option value="一人可搬">一人可搬</option>
+                      <option value="二人可搬">二人可搬</option>
+                      <option value="一人技術搬">一人技術搬</option>
+                      <option value="二人技術搬">二人技術搬</option>
+                      <option value="特殊技法搬">特殊技法搬</option>
                   </select>
                </div>
                <div>
                   <label class="text-xs font-bold text-gray-500 block mb-1">拆裝需求</label>
                   <select class="select-field py-2 inp-disassembly" onchange="updateAiItemDisplay(this)">
-                     <option value="無需拆裝">無需拆裝</option>
-                     <option value="簡易拆裝">簡易拆裝</option>
-                     <option value="複雜拆裝">複雜拆裝</option>
-                     <option value="系統拆裝">系統拆裝</option>
-                     <option value="特技拆裝">特技拆裝</option>
+                      <option value="無需拆裝">無需拆裝</option>
+                      <option value="簡易拆裝">簡易拆裝</option>
+                      <option value="複雜拆裝">複雜拆裝</option>
+                      <option value="系統拆裝">系統拆裝</option>
+                      <option value="特技拆裝">特技拆裝</option>
                   </select>
                </div>
             </div>
