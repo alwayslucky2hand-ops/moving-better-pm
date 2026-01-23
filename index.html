@@ -1151,86 +1151,83 @@ function trackProgress() {
 // 7. 簽名板功能 (補上這段即可修復紅色錯誤)
 // ==========================================
 
+// ==========================================
+// 7. 簽名板功能 (修改後)
+// ==========================================
+
 function initSignaturePad() {
-  const canvas = document.getElementById('signature-canvas');
-  if (!canvas) return;
+  const canvas = document.getElementById('signature-canvas');
+  if (!canvas) return;
 
-  // 設定畫布大小符合容器
-  const parent = canvas.parentElement;
-  canvas.width = parent.clientWidth;
-  canvas.height = parent.clientHeight;
+  // 設定畫布大小符合容器
+  const parent = canvas.parentElement;
+  canvas.width = parent.clientWidth;
+  canvas.height = parent.clientHeight;
 
-  const ctx = canvas.getContext('2d');
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
 
-  signaturePad.canvas = canvas;
-  signaturePad.ctx = ctx;
+  signaturePad.canvas = canvas;
+  signaturePad.ctx = ctx;
 
-  // 繪圖事件處理
-  const startDraw = (e) => {
-    signaturePad.isDrawing = true;
-    // 隱藏 "請在此簽名" 的提示字
-    const placeholder = document.querySelector('.signature-placeholder');
-    if (placeholder) placeholder.style.display = 'none';
+  // 繪圖事件處理
+  const startDraw = (e) => {
+    signaturePad.isDrawing = true;
+    // 隱藏 "請在此簽名" 的提示字
+    const placeholder = document.querySelector('.signature-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
 
-    ctx.beginPath();
-    const { x, y } = getPos(e);
-    ctx.moveTo(x, y);
-  };
+    ctx.beginPath();
+    const { x, y } = getPos(e);
+    ctx.moveTo(x, y);
+  };
 
-  const draw = (e) => {
-    if (!signaturePad.isDrawing) return;
-    e.preventDefault(); // 防止手機滑動頁面
-    const { x, y } = getPos(e);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
+  const draw = (e) => {
+    if (!signaturePad.isDrawing) return;
+    e.preventDefault(); // 防止手機滑動頁面
+    const { x, y } = getPos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
 
-  const stopDraw = () => {
-    signaturePad.isDrawing = false;
-  };
+  const stopDraw = () => {
+    signaturePad.isDrawing = false;
+  };
 
-  // 取得座標 (兼容滑鼠與觸控)
-  const getPos = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
-    };
-  };
+  // 取得座標 (兼容滑鼠與觸控)
+  const getPos = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  };
 
-  // 綁定事件 (滑鼠)
-  canvas.addEventListener('mousedown', startDraw);
-  canvas.addEventListener('mousemove', draw);
-  canvas.addEventListener('mouseup', stopDraw);
-  canvas.addEventListener('mouseout', stopDraw);
+  // 綁定事件 (滑鼠)
+  canvas.addEventListener('mousedown', startDraw);
+  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', stopDraw);
+  canvas.addEventListener('mouseout', stopDraw);
 
-  // 綁定事件 (觸控/手機)
-  canvas.addEventListener('touchstart', startDraw, { passive: false });
-  canvas.addEventListener('touchmove', draw, { passive: false });
-  canvas.addEventListener('touchend', stopDraw);
-}
+  // 綁定事件 (觸控/手機)
+  canvas.addEventListener('touchstart', startDraw, { passive: false });
+  canvas.addEventListener('touchmove', draw, { passive: false });
+  canvas.addEventListener('touchend', stopDraw);
 
-// 清除簽名按鈕的功能
-function clearSignature() {
-  if (!signaturePad.canvas) return;
-  const ctx = signaturePad.ctx;
-  ctx.clearRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height);
-  const placeholder = document.querySelector('.signature-placeholder');
-  if (placeholder) placeholder.style.display = 'block';
-}
-
-  // 監聽視窗改變大小，重新調整畫布 (選用，但建議加上)
+  // [修改重點] 將 resize 監聽器移入函數內部
   window.addEventListener('resize', () => {
      const parent = canvas.parentElement;
-     canvas.width = parent.clientWidth;
-     canvas.height = parent.clientHeight;
-     // 注意：重設寬高會清空畫布，需權衡 UX
+     if(parent) {
+         canvas.width = parent.clientWidth;
+         canvas.height = parent.clientHeight;
+         // 注意：重設寬高會清空畫布，若需保留內容需額外處理，這裡先保持簡單
+     }
   });
+}
   
 
     // ==========================================
@@ -1464,87 +1461,97 @@ function clearSignature() {
     // ==========================================
     // 6. 預約送出 (API 整合版)
     // ==========================================
-    async function handleBooking() {
-        const btn = document.getElementById('btn-book-now');
-        if (!confirm('確定要送出預約嗎？\n系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)')) return;
+async function handleBooking() {
+        const btn = document.getElementById('btn-book-now');
+        if (!confirm('確定要送出預約嗎？\n系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)')) return;
 
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 資料上傳中...';
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 資料上傳中...';
 
-        try {
-            const imagesData = await prepareAllImages();
-            const guideContent = document.getElementById('guide-content').innerHTML;
-            const totalFee = document.getElementById('result-total-fee').innerText;
-            const notes = document.getElementById('final-special-notes').value;
-            
-            // 簽名圖片
-            let signatureData = "";
-            if (signaturePad.canvas) {
-                 signatureData = signaturePad.canvas.toDataURL('image/png').split(',')[1];
-            }
+        try {
+            // [新增] 加入 log 方便除錯
+            console.log("開始準備圖片資料...");
+            const imagesData = await prepareAllImages();
+            console.log("圖片資料準備完成", imagesData);
 
-            const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
-                  const outSel = card.querySelector('.move-out-select');
-                  const inSel = card.querySelector('.move-in-select');
-                  const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
-                  return {
-                    name: card.querySelector('.area-name-input').value || '打包區域',
-                    moveOutSelect: getTxt(outSel),
-                    moveInSelect: getTxt(inSel),   
-                    items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
-                        name: row.querySelector('.item-name').innerText, 
-                        qty: row.querySelector('.val-qty').value,
-                        tags: row.querySelector('.item-tags-detail')?.innerText || '', 
-                        risk: row.querySelector('.item-risk-text')?.innerText || '',    
-                        sop: row.querySelector('.item-sop')?.innerText || ''            
-                    }))
-                  };
-            });
+            const guideContent = document.getElementById('guide-content').innerHTML;
+            const totalFee = document.getElementById('result-total-fee').innerText;
+            const notes = document.getElementById('final-special-notes').value;
+            
+            // 簽名圖片
+            let signatureData = "";
+            if (signaturePad.canvas) {
+                 signatureData = signaturePad.canvas.toDataURL('image/png').split(',')[1];
+            }
 
-            const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
-                return {
-                      name: card.querySelector('.area-name-input').value || '未命名區域',
-                      floorOut: card.querySelector('.area-out-floor-select').value,
-                      floorIn: card.querySelector('.area-in-floor-select').value,
-                      items: [] 
-                };
-            });
+            const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
+                // ... (略) ...
+                // 保持原有的 mapping 邏輯
+                  const outSel = card.querySelector('.move-out-select');
+                  const inSel = card.querySelector('.move-in-select');
+                  const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
+                  return {
+                    name: card.querySelector('.area-name-input').value || '打包區域',
+                    moveOutSelect: getTxt(outSel),
+                    moveInSelect: getTxt(inSel),   
+                    items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
+                        name: row.querySelector('.item-name').innerText, 
+                        qty: row.querySelector('.val-qty').value,
+                        tags: row.querySelector('.item-tags-detail')?.innerText || '', 
+                        risk: row.querySelector('.item-risk-text')?.innerText || '',    
+                        sop: row.querySelector('.item-sop')?.innerText || ''            
+                    }))
+                  };
+            });
 
-            const payload = {
-                basic: userData.basic,            
-                locations: userData.locations,    
-                packingDetails: packingDetailsData, 
-                areas: areasData,                 
-                specialNotes: notes,              
-                totalFee: totalFee,               
-                guideHtml: guideContent,          
-                images: imagesData,
-                signature: signatureData               
-            };
+            // ... (略) ...
+            // 保持原有的 areasData 邏輯
+            const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
+                return {
+                      name: card.querySelector('.area-name-input').value || '未命名區域',
+                      floorOut: card.querySelector('.area-out-floor-select').value,
+                      floorIn: card.querySelector('.area-in-floor-select').value,
+                      items: [] 
+                };
+            });
 
-            const res = await callBackendAPI('processBooking', payload);
+            const payload = {
+                basic: userData.basic,            
+                locations: userData.locations,    
+                packingDetails: packingDetailsData, 
+                areas: areasData,                 
+                specialNotes: notes,              
+                totalFee: totalFee,               
+                guideHtml: guideContent,          
+                images: imagesData,
+                signature: signatureData               
+            };
 
-            if (res.success) {
-                btn.innerHTML = '<i class="fas fa-check"></i> 預約成功';
-                btn.classList.remove('bg-brand-dark');
-                btn.classList.add('bg-green-600');
-                
-                alert('🎉 預約資料已成功送出！\n確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。');
-                
-                document.getElementById('action-buttons').style.display = 'none';
-                document.getElementById('btn-line-connect').classList.remove('hidden');
-            } else {
-                throw new Error(res.error);
-            }
+            console.log("準備發送 payload", payload);
+            const res = await callBackendAPI('processBooking', payload);
+            console.log("後端回應", res);
 
-        } catch (err) {
-            console.error(err);
-            alert('上傳失敗，請重試或聯繫客服：' + err.message);
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        }
-    }
+            if (res.success) {
+                btn.innerHTML = '<i class="fas fa-check"></i> 預約成功';
+                btn.classList.remove('bg-brand-dark');
+                btn.classList.add('bg-green-600');
+                
+                alert('🎉 預約資料已成功送出！\n確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。');
+                
+                document.getElementById('action-buttons').style.display = 'none';
+                document.getElementById('btn-line-connect').classList.remove('hidden');
+            } else {
+                throw new Error(res.error);
+            }
+
+        } catch (err) {
+            console.error("handleBooking 錯誤:", err); // [修改] 印出完整錯誤物件
+            alert('上傳失敗，請重試或聯繫客服：' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
 
     // [輔助] 將所有圖片轉為 Base64 並分類
     async function prepareAllImages() {
