@@ -1474,36 +1474,25 @@ async function handleBooking() {
 
     try {
         console.log("開始準備圖片資料...");
-        // 準備圖片 (Base64)
         const imagesData = await prepareAllImages();
         console.log("圖片資料準備完成");
 
         // 3. 收集資料
-        // 指南 HTML 內容
         const guideContent = document.getElementById('guide-content').innerHTML;
-        
-        // 畫面上的總金額文字 (例如 "$ 15,000")
         const totalFeeText = document.getElementById('result-total-fee').innerText;
-        
-        // 特殊備註
         const notes = document.getElementById('final-special-notes').value;
         
-        // 處理簽名圖片
         let signatureData = "";
         if (signaturePad && signaturePad.canvas) {
-             // 確保有簽名才轉檔，避免空畫布報錯
-             // 若使用者沒簽名，這裡會是空字串，後端會判斷為"未簽名"
-             try {
-                signatureData = signaturePad.canvas.toDataURL('image/png').split(',')[1];
-             } catch(e) { console.warn("簽名處理略過:", e); }
+             try { signatureData = signaturePad.canvas.toDataURL('image/png').split(',')[1]; } 
+             catch(e) { console.warn("簽名處理略過:", e); }
         }
 
-// 整理打包區域資料 (Packing Details) - [修正] 改抓 innerHTML 以保留排版
+        // [Step 2] 打包資料 (維持 innerHTML 抓取以保留 SOP 格式)
         const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
             const outSel = card.querySelector('.move-out-select');
             const inSel = card.querySelector('.move-in-select');
             const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
-            
             return {
                 name: card.querySelector('.area-name-input').value || '打包區域',
                 moveOutSelect: getTxt(outSel),
@@ -1513,21 +1502,16 @@ async function handleBooking() {
                     qty: row.querySelector('.val-qty').value,
                     tags: row.querySelector('.item-tags-detail')?.innerText || '', 
                     risk: row.querySelector('.item-risk-text')?.innerText || '',
-                    // [修正] 改用 innerHTML 抓取工具和 SOP，保留換行和標籤
                     materials: row.querySelector('.item-materials')?.innerHTML || '',
                     sop: row.querySelector('.item-sop')?.innerHTML || ''            
                 }))
             };
         });
 
-        // 整理搬運區域資料 (Areas Data)
+        // [Step 3] 搬運資料 (確保抓取風險與難度)
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
-             const outSel = card.querySelector('.area-move-out-select');
-             const inSel = card.querySelector('.area-move-in-select');
-             // 這裡要抓樓層文字供後端組合字串使用
              const outFloorSel = card.querySelector('.area-out-floor-select');
              const inFloorSel = card.querySelector('.area-in-floor-select');
-
              return {
                    name: card.querySelector('.area-name-input').value || '未命名區域',
                    floorOut: outFloorSel ? outFloorSel.value : '',
@@ -1535,46 +1519,43 @@ async function handleBooking() {
                    items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
                         name: row.querySelector('.item-name').value || row.querySelector('.inp-name').value,
                         qty: row.querySelector('.item-qty').innerText || row.querySelector('.inp-qty').value,
-                        difficulty: row.querySelector('.inp-difficulty')?.value || '',
-                        disassembly: row.querySelector('.inp-disassembly')?.value || '',
-                        riskNote: row.querySelector('.inp-risknote')?.value || ''
+                        difficulty: row.querySelector('.inp-difficulty')?.value || '一人可搬', // 難度
+                        disassembly: row.querySelector('.inp-disassembly')?.value || '無需拆裝', // 拆裝
+                        riskNote: row.querySelector('.inp-risknote')?.value || '' // 風險提示
                    })) 
              };
         });
 
-        // 4. 建構 Payload (傳送給後端的包裹)
-        const payload = {
-            // 基本資料 (從 Step 0 存下來的)
-            basic: userData.basic || {}, 
-            
-            // 地點資料 (Step 1)
-            locations: userData.locations || [],   
-            
-            // 打包清單 (Step 2)
-            packingDetails: packingDetailsData, 
-            
-            // 搬運物件 (Step 3)
-            areas: areasData,                  
-            
-            // 備註 (Step 4)
-            specialNotes: notes,               
-            
-            // [關鍵修正 1] 傳送完整的估價結果物件
-            // 包含: totalFee, baseTrucks (車次), baseManpower (人力), costs (明細)
-            quoteResult: userData.quoteResult || { totalFee: 0, baseTrucks: 0, baseManpower: 0 }, 
-            
-            // [關鍵修正 2] 傳送處理過的純數字總金額 (移除 $ 和空格)
-            totalFee: totalFeeText.replace(/[$\s,]/g, ''), 
-            
-            // 指南 HTML (用於後端存檔或寄信)
-            guideHtml: guideContent,           
-            
-            // 圖片與簽名
-            images: imagesData,
-            signature: signatureData                
+        // [Step 5] 費用明細抓取 (新增：直接抓取前端顯示的文字描述)
+        const getCostText = (id) => document.getElementById(id)?.innerText || '';
+        const costDetails = {
+            base: { desc: getCostText('desc-base-fee'), val: getCostText('cost-base-fee') },
+            stair: { desc: getCostText('desc-stair-fee'), val: getCostText('cost-stair-fee') },
+            special: { desc: getCostText('desc-special-route-fee'), val: getCostText('cost-special-route-fee') },
+            disassembly: { desc: getCostText('desc-disassembly-fee'), val: getCostText('cost-disassembly-fee') },
+            intercity: { desc: getCostText('desc-inter-city-fee'), val: getCostText('cost-inter-city-fee') },
+            crane: { desc: getCostText('desc-crane-fee'), val: getCostText('cost-crane-fee') },
+            packing: { desc: getCostText('desc-packing-fee'), val: getCostText('cost-packing-fee') },
+            organizing: { desc: getCostText('desc-organizing-fee'), val: getCostText('cost-organizing-fee') }
         };
 
-        console.log("準備發送 payload", payload); // Debug 用，可以在 Console 看到送出的資料
+        // 4. 建構 Payload
+        const payload = {
+            basic: userData.basic || {}, 
+            locations: userData.locations || [],   
+            packingDetails: packingDetailsData, 
+            areas: areasData,                  
+            specialNotes: notes,               
+            quoteResult: userData.quoteResult || { totalFee: 0, baseTrucks: 0, baseManpower: 0 }, 
+            totalFee: totalFeeText.replace(/[$\s,]/g, ''), 
+            guideHtml: guideContent,           
+            images: imagesData,
+            signature: signatureData,
+            // [新增] 傳送前端抓取的費用明細文字
+            costDetails: costDetails 
+        };
+
+        console.log("準備發送 payload", payload); 
 
         // 5. 呼叫後端 API
         const res = await callBackendAPI('processBooking', payload);
@@ -1585,10 +1566,7 @@ async function handleBooking() {
             btn.innerHTML = '<i class="fas fa-check"></i> 預約成功';
             btn.classList.remove('bg-brand-dark');
             btn.classList.add('bg-green-600');
-            
             alert('🎉 預約資料已成功送出！\n確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。');
-            
-            // 切換按鈕顯示
             document.getElementById('action-buttons').style.display = 'none';
             document.getElementById('btn-line-connect').classList.remove('hidden');
         } else {
@@ -1598,13 +1576,10 @@ async function handleBooking() {
     } catch (err) {
         console.error("handleBooking 錯誤:", err);
         alert('上傳失敗，請重試或聯繫客服：' + (err.message || err));
-        
-        // 恢復按鈕狀態
         btn.disabled = false;
         btn.innerHTML = originalText;
     }
 }
-
     // [輔助] 將所有圖片轉為 Base64 並分類
     async function prepareAllImages() {
         const result = { route: [], packing: [], item: [] };
