@@ -672,11 +672,11 @@
     });
 
     // ==========================================
-    // 2. 步驟導航 (API 整合版)
+    // 2. 步驟導航 (API 整合版 - 修正連線問題)
     // ==========================================
     async function nextStep() { 
         if (currentStep === 0) { 
-            // --- Step 0: 驗證會員代碼 ---
+            // --- Step 0: 基本資料收集 ---
             const name = document.getElementById('input-name').value; 
             const email = document.getElementById('input-email').value;
             const date = document.getElementById('input-date').value; 
@@ -688,35 +688,13 @@
             // 強制檢查是否有輸入代碼
             if(!referrer) return alert('請輸入會員代碼才能繼續！');
 
-            const btnNext = document.getElementById('btn-next');
-            const originalText = document.getElementById('btn-text-main').innerText;
+            // 🟢【修改重點】：這裡原本會呼叫後端檢查，現在直接跳過
+            // 不再執行 callBackendAPI，避免 302 錯誤
+            console.log("跳過後端檢查，直接進入 Step 1");
             
-            // 設定按鈕讀取中
-            setBtnLoading(btnNext, true);
+            // 直接進入下一步
+            proceedToStep1(name, email, date, type, referrer);
             
-            try {
-                // 呼叫後端檢查 checkReferrerCode (改用 callBackendAPI)
-                const res = await callBackendAPI('checkReferrerCode', { referrer: referrer });
-                // 後端回傳的是 { valid: true/false } (請確認 GAS 端是否已修改為回傳物件)
-                // 如果後端還是直接回傳 true/false，則使用 const isValid = res;
-                const isValid = (typeof res === 'object' && res.valid !== undefined) ? res.valid : res;
-
-                setBtnLoading(btnNext, false);
-                document.getElementById('btn-text-main').innerText = originalText;
-                
-                if (isValid) {
-                    // [成功] 代碼存在，進入下一步
-                    proceedToStep1(name, email, date, type, referrer);
-                } else {
-                    // [失敗]
-                    alert('❌ 會員代碼無效！\n此代碼不在我們的會員名冊中，請確認後再試。');
-                }
-            } catch (err) {
-                setBtnLoading(btnNext, false);
-                document.getElementById('btn-text-main').innerText = originalText;
-                // 錯誤已在 callBackendAPI 中處理，這裡不需額外 alert
-            }
-
             return; 
         }
         
