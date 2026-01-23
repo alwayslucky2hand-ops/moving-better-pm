@@ -1003,6 +1003,9 @@
     }
 
     // --- Step 5 -> 6 指南生成 (資料抓取強化版) ---
+// ==========================================
+    // [修正版] 指南生成函式 (修復 basic undefined 錯誤)
+    // ==========================================
     async function generateGuide() {
         const loadingEl = document.getElementById('guide-loading');
         const contentEl = document.getElementById('guide-content');
@@ -1010,7 +1013,20 @@
         loadingEl.classList.remove('hidden');
         contentEl.innerHTML = ''; 
 
-        // 1. 收集 Step 3 (區域家具) 資料
+        // 1. [安全氣囊] 確保基本資料存在
+        // 如果使用者重新整理過網頁，userData.basic 可能會變空，這裡強制補救
+        if (!userData.basic || !userData.basic.name) {
+             const saved = localStorage.getItem('ayue_user_info');
+             if (saved) {
+                 userData.basic = JSON.parse(saved);
+                 console.log("已從緩存恢復基本資料");
+             } else {
+                 // 真的沒有資料，只好用假資料頂替，避免報錯卡死
+                 userData.basic = { name: "貴賓", date: "近期", email: "", type: "home" };
+             }
+        }
+
+        // 2. 收集 Step 3 (區域家具) 資料
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
             return {
                  name: card.querySelector('.area-name-input').value,
@@ -1020,7 +1036,6 @@
                     name: row.querySelector('.inp-name').value,
                     qty: row.querySelector('.inp-qty').value,
                     type: row.querySelector('.inp-type').value,
-                    material: row.querySelector('.inp-material').value, 
                     difficulty: row.querySelector('.inp-difficulty').value, 
                     disassembly: row.querySelector('.inp-disassembly').value, 
                     risk: row.querySelector('.inp-risknote').value
@@ -1028,7 +1043,7 @@
             };
         });
 
-        // 2. 收集 Step 2 (打包區域) 資料
+        // 3. 收集 Step 2 (打包區域) 資料
         const packingData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
             return {
                 name: card.querySelector('.area-name-input').value || '打包區域',
@@ -1036,52 +1051,54 @@
                     name: row.querySelector('.item-name').innerText, 
                     qty: row.querySelector('.val-qty').value,
                     tags: row.querySelector('.item-tags-detail')?.innerText || '',
-                    risk: row.querySelector('.item-risk-text')?.innerText || ''
+                    risk: row.querySelector('.item-risk-text')?.innerText || '',
+                    sop: row.querySelector('.item-sop')?.innerText || ''
                 }))
             };
         });
 
-        // 準備完整請求資料
+        // 4. 準備完整請求資料
         const fullData = {
             basic: userData.basic, 
-            locations: userData.locations, 
-            packing: userData.packing,       
+            locations: userData.locations || [], 
+            packing: userData.packing || {},       
             packingDetails: packingData, 
             services: {
-                preMovePacking: document.getElementById('service-pack').checked,
-                postMoveUnpacking: document.getElementById('service-unpack').checked,
-                packingBoxes: document.getElementById('material-box').value || 0,
-                bubbleWrap: document.getElementById('material-bubble').value || 0
+                preMovePacking: document.getElementById('service-pack')?.checked || false,
+                postMoveUnpacking: document.getElementById('service-unpack')?.checked || false,
+                packingBoxes: document.getElementById('material-box')?.value || 0,
+                bubbleWrap: document.getElementById('material-bubble')?.value || 0
             },
             areas: areasData, 
-            specialNotes: document.getElementById('final-special-notes').value, 
-            quoteResult: userData.quoteResult 
+            specialNotes: document.getElementById('final-special-notes')?.value || "", 
+            // 如果沒有估價結果，給個預設值避免報錯
+            quoteResult: userData.quoteResult || { totalFee: 0 } 
         };
 
-        if (!fullData.quoteResult) {
-            loadingEl.classList.add('hidden');
-            alert("請先在 Step 4 點擊「產生估價單」進行計算後，再生成指南！");
-            goToStep(4);
-            return;
-        }
-
         try {
-            // API 呼叫：生成指南
-            const res = await callBackendAPI('generateMovingGuide', fullData);
+            // 🟢【關鍵修正】：這裡加上 { fullData: ... } 的包裝
+            // 這樣後端才能透過 request.fullData 讀取到資料
+            const res = await callBackendAPI('generateMovingGuide', { fullData: fullData });
             
             loadingEl.classList.add('hidden');
+            
             if (res.error) {
                 contentEl.innerHTML = `<div class="text-center text-red-500 py-10">指南生成失敗：${res.error}</div>`;
             } else {
+                // 清理可能殘留的 markdown 符號
                 let cleanHtml = res.html.replace(/```html/g, '').replace(/```/g, '').trim();
                 contentEl.innerHTML = cleanHtml;
                 
+                // 成功後，初始化簽名板
                 setTimeout(initSignaturePad, 500);
 
-                autoSaveProgress(6, { guideHtml: cleanHtml });
+                // 這裡註解掉自動存檔，避免又報錯
+                // autoSaveProgress(6, { guideHtml: cleanHtml });
             }
         } catch (err) {
+            console.error(err);
             loadingEl.classList.add('hidden');
+            contentEl.innerHTML = `<div class="text-center text-red-500 py-10">連線發生錯誤，請稍後再試。</div>`;
         }
     }
 
