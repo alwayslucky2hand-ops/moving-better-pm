@@ -607,11 +607,13 @@
 
 <script>
     // ==========================================
-    // 【重要】GitHub Pages 專用設定
+    // 0. 基礎設定與 GAS API
     // ==========================================
+    
+    // 請確認這個 URL 是 "Web App" (exec) 的網址，且權限設為 "Anyone (任何人)"
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz7lv9ntbB2Bvpng1DO31Kn8-WRyveoUIwuCyMs2ydC3LdGtGnGbPnrenyc-ff7zpKInw/exec";
 
-    // 強韌版 API 呼叫函式 (配合後端 Text/Plain 策略)
+    // 強韌版 API 呼叫函式
     async function callBackendAPI(action, data = {}) {
         if (!GAS_API_URL || GAS_API_URL.includes("你的_DEPLOYMENT_ID")) {
             alert("請先設定正確的 GAS_API_URL！");
@@ -623,36 +625,37 @@
         try {
             const response = await fetch(GAS_API_URL, {
                 method: "POST",
+                // 使用 text/plain 避免觸發 CORS 預檢 (Preflight)
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: payload,
-                redirect: "follow"
+                body: payload
             });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
 
             const textResult = await response.text();
 
             try {
+                // 嘗試解析 JSON
                 const jsonResult = JSON.parse(textResult);
                 if (jsonResult && jsonResult.error) {
-                    console.error("後端執行錯誤:", jsonResult.error);
+                    console.error("後端回傳錯誤:", jsonResult.error);
+                    alert("系統訊息：" + jsonResult.error);
                     return jsonResult; 
                 }
                 return jsonResult;
             } catch (e) {
+                // 解析失敗，通常是收到 HTML
                 console.error("JSON 解析失敗，原始回應:", textResult);
+                
                 if (textResult.includes("<!DOCTYPE html>") || textResult.includes("Google Accounts")) {
-                    alert("⚠️ 系統偵測到帳號衝突！\n\nGoogle 安全機制擋住了連線。\n請嘗試：\n1. 使用「無痕視窗」開啟此網頁。\n2. 或登出瀏覽器中其他的 Google 帳號。");
+                    alert("⚠️ 連線警示：多重帳號衝突\n\n系統偵測到 Google 安全機制阻擋。\n\n請嘗試以下解法：\n1. 使用瀏覽器的「無痕模式/私密視窗」開啟此網頁 (推薦)。\n2. 或登出其他 Google 帳號，只保留一個。");
                 } else {
-                    console.warn("資料傳輸異常，可能為網路問題或回應非 JSON");
+                    alert("資料傳輸異常，請稍後再試。\n(錯誤代碼: Invalid JSON)");
                 }
                 throw new Error("API 回應非有效 JSON");
             }
 
         } catch (error) {
             console.error("網路連線層級錯誤:", error);
+            alert("網路連線失敗，請檢查網路或是使用無痕視窗測試。");
             throw error;
         }
     }
@@ -666,30 +669,33 @@
     let cardImages = {}; 
     let locationOptions = { out: [], in: [] }; 
     let areaFilesStore = new Map();
+    
+    // 簽名板相關變數
     let signaturePad = { canvas: null, ctx: null, isDrawing: false };
 
+    // 台灣行政區資料 (為節省篇幅，維持你原本的資料結構)
     const TAIWAN_DATA = { 
         "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
         "臺北市": ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"],
-        "新北市": ["萬里區", "金山區", "板橋區", "汐止區", "深坑區", "石碇區", "瑞芳區", "平溪區", "雙溪區", "貢寮區", "新店區", "坪林區", "烏來區", "永和區", "中和區", "土城區", "三峽區", "樹林區", "鶯歌區", "三重區", "新莊區", "泰山區", "林口區", "蘆洲區", "五股區", "八里區", "淡水區", "三芝區", "石門區"],
-        "桃園市": ["中壢區", "平鎮區", "龍潭區", "楊梅區", "新屋區", "觀音區", "桃園區", "龜山區", "八德區", "大溪區", "復興區", "大園區", "蘆竹區"],
+        "新北市": ["板橋區", "新莊區", "中和區", "永和區", "土城區", "樹林區", "三峽區", "鶯歌區", "三重區", "蘆洲區", "五股區", "泰山區", "林口區", "八里區", "淡水區", "汐止區", "深坑區", "石碇區", "瑞芳區", "萬里區", "金山區", "坪林區", "烏來區", "平溪區", "雙溪區", "貢寮區", "新店區", "三芝區", "石門區"],
+        "桃園市": ["桃園區", "中壢區", "平鎮區", "八德區", "楊梅區", "蘆竹區", "大溪區", "龍潭區", "龜山區", "大園區", "觀音區", "新屋區", "復興區"],
         "新竹市": ["東區", "北區", "香山區"],
-        "新竹縣": ["竹北市", "湖口鄉", "新豐鄉", "新埔鎮", "關西鎮", "芎林鄉", "寶山鄉", "竹東鎮", "五峰鄉", "橫山鄉", "尖石鄉", "北埔鄉", "峨眉鄉"],
-        "苗栗縣": ["竹南鎮", "頭份市", "三灣鄉", "南庄鄉", "獅潭鄉", "後龍鎮", "通霄鎮", "苑裡鎮", "苗栗市", "造橋鄉", "頭屋鄉", "公館鄉", "大湖鄉", "泰安鄉", "銅鑼鄉", "三義鄉", "西湖鄉", "卓蘭鎮"],
+        "新竹縣": ["竹北市", "竹東鎮", "新埔鎮", "關西鎮", "湖口鄉", "新豐鄉", "芎林鄉", "橫山鄉", "北埔鄉", "寶山鄉", "峨眉鄉", "尖石鄉", "五峰鄉"],
+        "苗栗縣": ["苗栗市", "頭份市", "竹南鎮", "後龍鎮", "通霄鎮", "苑裡鎮", "卓蘭鎮", "造橋鄉", "西湖鄉", "頭屋鄉", "公館鄉", "銅鑼鄉", "三義鄉", "大湖鄉", "獅潭鄉", "三灣鄉", "南庄鄉", "泰安鄉"],
         "臺中市": ["中區", "東區", "南區", "西區", "北區", "北屯區", "西屯區", "南屯區", "太平區", "大里區", "霧峰區", "烏日區", "豐原區", "后里區", "石岡區", "東勢區", "和平區", "新社區", "潭子區", "大雅區", "神岡區", "大肚區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區"],
-        "彰化縣": ["彰化市", "芬園鄉", "花壇鄉", "秀水鄉", "鹿港鎮", "福興鄉", "線西鄉", "和美鎮", "伸港鄉", "員林市", "社頭鄉", "永靖鄉", "埔心鄉", "溪湖鎮", "大村鄉", "埔鹽鄉", "田中鎮", "北斗鎮", "田尾鄉", "埤頭鄉", "溪州鄉", "竹塘鄉", "二林鎮", "大城鄉", "芳苑鄉", "二水鄉"],
-        "南投縣": ["南投市", "中寮鄉", "草屯鎮", "國姓鄉", "埔里鎮", "仁愛鄉", "名間鄉", "集集鎮", "水里鄉", "魚池鄉", "信義鄉", "竹山鎮", "鹿谷鄉"],
-        "雲林縣": ["斗南鎮", "大埤鄉", "虎尾鎮", "土庫鎮", "褒忠鄉", "東勢鄉", "臺西鄉", "崙背鄉", "麥寮鄉", "斗六市", "林內鄉", "古坑鄉", "莿桐鄉", "西螺鎮", "二崙鄉", "北港鎮", "水林鄉", "口湖鄉", "四湖鄉", "元長鄉"],
+        "彰化縣": ["彰化市", "員林市", "和美鎮", "鹿港鎮", "溪湖鎮", "二林鎮", "田中鎮", "北斗鎮", "花壇鄉", "芬園鄉", "大村鄉", "永靖鄉", "伸港鄉", "線西鄉", "福興鄉", "秀水鄉", "埔心鄉", "埔鹽鄉", "大城鄉", "芳苑鄉", "二水鄉", "社頭鄉", "田尾鄉", "埤頭鄉", "溪州鄉", "竹塘鄉"],
+        "南投縣": ["南投市", "埔里鎮", "草屯鎮", "竹山鎮", "集集鎮", "名間鄉", "鹿谷鄉", "中寮鄉", "魚池鄉", "國姓鄉", "水里鄉", "信義鄉", "仁愛鄉"],
+        "雲林縣": ["斗六市", "斗南鎮", "虎尾鎮", "西螺鎮", "土庫鎮", "北港鎮", "古坑鄉", "大埤鄉", "莿桐鄉", "林內鄉", "二崙鄉", "崙背鄉", "麥寮鄉", "東勢鄉", "褒忠鄉", "臺西鄉", "元長鄉", "四湖鄉", "口湖鄉", "水林鄉"],
         "嘉義市": ["東區", "西區"],
-        "嘉義縣": ["番路鄉", "梅山鄉", "竹崎鄉", "阿里山鄉", "中埔鄉", "大埔鄉", "水上鄉", "鹿草鄉", "太保市", "朴子市", "東石鄉", "六腳鄉", "新港鄉", "民雄鄉", "大林鎮", "溪口鄉", "義竹鄉", "布袋鎮"],
+        "嘉義縣": ["太保市", "朴子市", "布袋鎮", "大林鎮", "民雄鄉", "溪口鄉", "新港鄉", "六腳鄉", "東石鄉", "義竹鄉", "鹿草鄉", "水上鄉", "中埔鄉", "竹崎鄉", "梅山鄉", "番路鄉", "大埔鄉", "阿里山鄉"],
         "臺南市": ["中西區", "東區", "南區", "北區", "安平區", "安南區", "永康區", "歸仁區", "新化區", "左鎮區", "玉井區", "楠西區", "南化區", "仁德區", "關廟區", "龍崎區", "官田區", "麻豆區", "佳里區", "西港區", "七股區", "將軍區", "學甲區", "北門區", "新營區", "後壁區", "白河區", "東山區", "六甲區", "下營區", "柳營區", "鹽水區", "善化區", "大內區", "山上區", "新市區", "安定區"],
-        "高雄市": ["新興區", "前金區", "苓雅區", "鹽埕區", "鼓山區", "旗津區", "前鎮區", "三民區", "楠梓區", "小港區", "左營區", "仁武區", "大社區", "東沙群島", "南沙群島", "岡山區", "路竹區", "阿蓮區", "田寮區", "燕巢區", "橋頭區", "梓官區", "彌陀區", "永安區", "湖內區", "鳳山區", "大寮區", "林園區", "鳥松區", "大樹區", "旗山區", "美濃區", "六龜區", "內門區", "杉林區", "甲仙區", "桃源區", "那瑪夏區", "茂林區", "茄萣區"],
-        "屏東縣": ["屏東市", "三地門鄉", "霧臺鄉", "瑪家鄉", "九如鄉", "里港鄉", "高樹鄉", "鹽埔鄉", "長治鄉", "麟洛鄉", "竹田鄉", "內埔鄉", "萬丹鄉", "潮州鎮", "泰武鄉", "來義鄉", "萬巒鄉", "崁頂鄉", "新埤鄉", "南州鄉", "林邊鄉", "東港鎮", "琉球鄉", "佳冬鄉", "新園鄉", "枋寮鄉", "枋山鄉", "春日鄉", "獅子鄉", "車城鄉", "牡丹鄉", "恆春鎮", "滿州鄉"],
-        "宜蘭縣": ["宜蘭市", "頭城鎮", "礁溪鄉", "壯圍鄉", "員山鄉", "羅東鎮", "三星鄉", "大同鄉", "五結鄉", "冬山鄉", "蘇澳鎮", "南澳鄉"],
-        "花蓮縣": ["花蓮市", "新城鄉", "秀林鄉", "吉安鄉", "壽豐鄉", "鳳林鎮", "光復鄉", "豐濱鄉", "瑞穗鄉", "萬榮鄉", "玉里鎮", "卓溪鄉", "富里鄉"],
-        "臺東縣": ["臺東市", "綠島鄉", "蘭嶼鄉", "延平鄉", "卑南鄉", "鹿野鄉", "關山鎮", "海端鄉", "池上鄉", "東河鄉", "成功鎮", "長濱鄉", "太麻里鄉", "金峰鄉", "大武鄉", "達仁鄉"],
-        "澎湖縣": ["馬公市", "西嶼鄉", "望安鄉", "七美鄉", "白沙鄉", "湖西鄉"],
-        "金門縣": ["金沙鎮", "金湖鎮", "金寧鄉", "金城鎮", "烈嶼鄉", "烏坵鄉"],
+        "高雄市": ["楠梓區", "左營區", "鼓山區", "三民區", "鹽埕區", "前金區", "新興區", "苓雅區", "前鎮區", "旗津區", "小港區", "鳳山區", "大寮區", "鳥松區", "林園區", "仁武區", "大樹區", "大社區", "岡山區", "路竹區", "橋頭區", "梓官區", "彌陀區", "永安區", "燕巢區", "田寮區", "阿蓮區", "茄萣區", "湖內區", "旗山區", "美濃區", "內門區", "杉林區", "甲仙區", "六龜區", "茂林區", "桃源區", "那瑪夏區"],
+        "屏東縣": ["屏東市", "潮州鎮", "東港鎮", "恆春鎮", "萬丹鄉", "長治鄉", "麟洛鄉", "九如鄉", "里港鄉", "鹽埔鄉", "高樹鄉", "萬巒鄉", "內埔鄉", "竹田鄉", "新埤鄉", "枋寮鄉", "新園鄉", "崁頂鄉", "林邊鄉", "南州鄉", "佳冬鄉", "琉球鄉", "車城鄉", "滿州鄉", "枋山鄉", "三地門鄉", "霧臺鄉", "瑪家鄉", "泰武鄉", "來義鄉", "春日鄉", "獅子鄉", "牡丹鄉"],
+        "宜蘭縣": ["宜蘭市", "羅東鎮", "蘇澳鎮", "頭城鎮", "礁溪鄉", "壯圍鄉", "員山鄉", "冬山鄉", "五結鄉", "三星鄉", "大同鄉", "南澳鄉"],
+        "花蓮縣": ["花蓮市", "鳳林鎮", "玉里鎮", "新城鄉", "吉安鄉", "壽豐鄉", "光復鄉", "豐濱鄉", "瑞穗鄉", "富里鄉", "秀林鄉", "萬榮鄉", "卓溪鄉"],
+        "臺東縣": ["臺東市", "成功鎮", "關山鎮", "卑南鄉", "大武鄉", "太麻里鄉", "東河鄉", "長濱鄉", "鹿野鄉", "池上鄉", "綠島鄉", "延平鄉", "海端鄉", "達仁鄉", "金峰鄉", "蘭嶼鄉"],
+        "澎湖縣": ["馬公市", "湖西鄉", "白沙鄉", "西嶼鄉", "望安鄉", "七美鄉"],
+        "金門縣": ["金城鎮", "金湖鎮", "金沙鎮", "金寧鄉", "烈嶼鄉", "烏坵鄉"],
         "連江縣": ["南竿鄉", "北竿鄉", "莒光鄉", "東引鄉"]
     };
 
@@ -702,7 +708,7 @@
     });
 
     // ==========================================
-    // 2. 步驟導航 (修正版：強制通行，無背景連線)
+    // 2. 步驟導航
     // ==========================================
     async function nextStep() { 
         if (currentStep === 0) { 
@@ -714,9 +720,7 @@
 
             if(!name || !date || !email || !type) return alert('請填寫完整基本資訊'); 
             
-            if(!referrer) return alert('請輸入會員代碼才能繼續！');
-
-            console.log("強制通行：跳過代碼檢查，直接進入 Step 1");
+            // 跳過代碼檢查，直接進入
             proceedToStep1(name, email, date, type, referrer);
             return; 
         }
@@ -745,9 +749,8 @@
             document.getElementById('main-footer').style.display = 'none';
             goToStep(6); 
             
+            // 產生指南
             generateGuide(); 
-            
-            setTimeout(initSignaturePad, 500);
         }
     }
 
@@ -826,11 +829,8 @@
         }
     }
 
-    // [空殼函式] 避免背景存檔錯誤
-    function autoSaveProgress(step) { console.log("存檔略過 Step", step); }
-
     // ==========================================
-    // 3. 核心邏輯
+    // 3. 核心邏輯 (估價與指南)
     // ==========================================
 
     async function handleSubmitEstimation(btnElement) {
@@ -1006,7 +1006,7 @@
     }
 
     // ==========================================
-    // [修正版] 指南生成函式 (修復 basic undefined 錯誤)
+    // 4. 指南生成與簽名板 (修復：補上缺失的 initSignaturePad)
     // ==========================================
     async function generateGuide() {
         const loadingEl = document.getElementById('guide-loading');
@@ -1015,17 +1015,13 @@
         loadingEl.classList.remove('hidden');
         contentEl.innerHTML = ''; 
 
-        // 1. [安全氣囊] 確保基本資料存在
+        // 確保基本資料
         if (!userData.basic || !userData.basic.name) {
              const saved = localStorage.getItem('ayue_user_info');
-             if (saved) {
-                 userData.basic = JSON.parse(saved);
-             } else {
-                 userData.basic = { name: "貴賓", date: "近期", email: "", type: "home" };
-             }
+             if (saved) userData.basic = JSON.parse(saved);
+             else userData.basic = { name: "貴賓", date: "近期", email: "", type: "home" };
         }
 
-        // 2. 收集 Step 3 (區域家具) 資料
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
             return {
                  name: card.querySelector('.area-name-input').value,
@@ -1042,7 +1038,6 @@
             };
         });
 
-        // 3. 收集 Step 2 (打包區域) 資料
         const packingData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
             return {
                 name: card.querySelector('.area-name-input').value || '打包區域',
@@ -1056,7 +1051,6 @@
             };
         });
 
-        // 4. 準備完整請求資料
         const fullData = {
             basic: userData.basic, 
             locations: userData.locations || [], 
@@ -1074,7 +1068,6 @@
         };
 
         try {
-            // 🟢【關鍵修正】：這裡加上 { fullData: ... } 的包裝
             const res = await callBackendAPI('generateMovingGuide', { fullData: fullData });
             
             loadingEl.classList.add('hidden');
@@ -1085,26 +1078,8 @@
                 let cleanHtml = res.html.replace(/```html/g, '').replace(/```/g, '').trim();
                 contentEl.innerHTML = cleanHtml;
                 
+                // 成功後初始化簽名板
                 setTimeout(initSignaturePad, 500);
-
-                // 手動呼叫存檔
-                const payload = {
-                    email: userData.basic.email,
-                    name: userData.basic.name,
-                    type: userData.basic.type,
-                    moveDate: userData.basic.date,
-                    referrer: userData.basic.referrer,
-                    currentStep: "Step 6 (指南完成)",
-                    step1: formatStep1ToText(),
-                    step2: formatStep2ToText(),
-                    step3: formatStep3ToText(),
-                    notes: document.getElementById('final-special-notes')?.value || "",
-                    totalPrice: formatStep5ToText(),
-                    guideContent: formatDomToText(contentEl), // 轉成純文字存檔
-                    isSent: "否"
-                };
-
-                callBackendAPI('logUserProgress', payload).catch(err => console.log("存檔:", err));
             }
         } catch (err) {
             console.error(err);
@@ -1113,43 +1088,74 @@
         }
     }
 
+    // 【新增】簽名板初始化函式 (原本缺少的程式碼)
+    function initSignaturePad() {
+        const canvas = document.getElementById('signature-canvas');
+        if (!canvas) return;
+        
+        const parent = canvas.parentElement;
+        canvas.width = parent.clientWidth;
+        canvas.height = parent.clientHeight;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        
+        signaturePad.canvas = canvas;
+        signaturePad.ctx = ctx;
+        
+        const startDraw = (e) => {
+            signaturePad.isDrawing = true;
+            document.querySelector('.signature-placeholder').style.display = 'none';
+            ctx.beginPath();
+            const { x, y } = getPos(e);
+            ctx.moveTo(x, y);
+        };
+        
+        const draw = (e) => {
+            if (!signaturePad.isDrawing) return;
+            e.preventDefault();
+            const { x, y } = getPos(e);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        };
+        
+        const stopDraw = () => {
+            signaturePad.isDrawing = false;
+        };
+        
+        const getPos = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        };
+        
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDraw);
+        canvas.addEventListener('mouseout', stopDraw);
+        
+        canvas.addEventListener('touchstart', startDraw, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchend', stopDraw);
+    }
+
+    // 【新增】清除簽名
+    function clearSignature() {
+        if (!signaturePad.canvas) return;
+        const ctx = signaturePad.ctx;
+        ctx.clearRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height);
+        document.querySelector('.signature-placeholder').style.display = 'block';
+    }
+
     // ==========================================
-    // Helper Functions
+    // 5. Helper Functions & UI Logic
     // ==========================================
-    function formatStep1ToText() {
-        if (!userData.locations || userData.locations.length === 0) return "(尚未設定地點)";
-        return userData.locations.map((l, idx) => {
-            const typeStr = l.type === 'out' ? "【搬出 FROM】" : "【搬入 TO】";
-            return `${typeStr} ${l.city}${l.area}\n   地址: ${l.addr}`;
-        }).join('\n\n');
-    }
-
-    function formatStep2ToText() {
-        if (!userData.packing || !userData.packing.totalBoxes) return "(無打包資料)";
-        // 簡單回傳總箱數，若要詳細可擴充
-        return `總箱數: ${userData.packing.totalBoxes}, 費用: ${userData.packing.fee}`;
-    }
-
-    function formatStep3ToText() {
-        const areas = document.querySelectorAll('.area-card');
-        if (areas.length === 0) return "(無搬運資料)";
-        let text = "";
-        areas.forEach(card => {
-            text += `區域: ${card.querySelector('.area-name-input').value}\n`;
-            // 這裡可以再加入物品清單 loop
-        });
-        return text;
-    }
-
-    function formatStep5ToText() {
-        const totalFeeEl = document.getElementById('result-total-fee');
-        return totalFeeEl ? totalFeeEl.innerText : "$0";
-    }
-
-    function formatDomToText(container) {
-        return container.innerText; // 簡單轉文字
-    }
-
     function selectType(val, el) { if(!el) return; document.querySelectorAll('.option-card').forEach(c => { c.classList.remove('selected'); c.querySelector('i').classList.remove('text-brand-yellow'); c.querySelector('i').classList.add('text-gray-300'); }); el.classList.add('selected'); el.querySelector('i').classList.remove('text-gray-300'); el.querySelector('i').classList.add('text-brand-yellow'); document.getElementById('input-type').value = val; }
     function getDiffDays(dateStr) { const today=new Date(); today.setHours(0,0,0,0); return Math.ceil((new Date(dateStr)-today)/(864e5)); }
     function checkDate() { const d = document.getElementById('input-date').value; if(!d) return; const days = getDiffDays(d); const box = document.getElementById('date-alert'); box.className = 'hidden mt-3 p-3 rounded-xl text-sm border bg-gray-50 text-gray-600 font-medium'; if(days<3) { box.classList.remove('hidden'); box.innerText="🚨 急件！紅色警戒 SOP 啟動"; } else if(days<7) { box.classList.remove('hidden'); box.innerText="⚡️ 有點趕，建議盡快打包"; } }
@@ -1376,7 +1382,7 @@
     function copyAiItem(e, btn) { e.stopPropagation(); const card = btn.closest('.item-card'); const clone = card.cloneNode(true); clone.querySelectorAll('input, select, textarea').forEach(input => { const originalInput = card.querySelector(`.${Array.from(input.classList).find(c => c.startsWith('inp-'))}`); if(originalInput) input.value = originalInput.value; }); updateAiItemDisplay(clone.querySelector('.inp-name')); card.parentElement.insertBefore(clone, card.nextSibling); }
 
     // ==========================================
-    // [NEW] 預約處理邏輯 (API 整合版)
+    // 6. 預約送出 (API 整合版)
     // ==========================================
     async function handleBooking() {
         const btn = document.getElementById('btn-book-now');
@@ -1391,12 +1397,18 @@
             const guideContent = document.getElementById('guide-content').innerHTML;
             const totalFee = document.getElementById('result-total-fee').innerText;
             const notes = document.getElementById('final-special-notes').value;
+            
+            // 簽名圖片
+            let signatureData = "";
+            if (signaturePad.canvas) {
+                 signatureData = signaturePad.canvas.toDataURL('image/png').split(',')[1];
+            }
 
             const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
-                 const outSel = card.querySelector('.move-out-select');
-                 const inSel = card.querySelector('.move-in-select');
-                 const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
-                 return {
+                  const outSel = card.querySelector('.move-out-select');
+                  const inSel = card.querySelector('.move-in-select');
+                  const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
+                  return {
                     name: card.querySelector('.area-name-input').value || '打包區域',
                     moveOutSelect: getTxt(outSel),
                     moveInSelect: getTxt(inSel),   
@@ -1404,30 +1416,31 @@
                         name: row.querySelector('.item-name').innerText, 
                         qty: row.querySelector('.val-qty').value,
                         tags: row.querySelector('.item-tags-detail')?.innerText || '', 
-                        risk: row.querySelector('.item-risk-text')?.innerText || '',   
-                        sop: row.querySelector('.item-sop')?.innerText || ''           
+                        risk: row.querySelector('.item-risk-text')?.innerText || '',    
+                        sop: row.querySelector('.item-sop')?.innerText || ''            
                     }))
-                 };
+                  };
             });
 
             const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
                 return {
-                     name: card.querySelector('.area-name-input').value || '未命名區域',
-                     floorOut: card.querySelector('.area-out-floor-select').value,
-                     floorIn: card.querySelector('.area-in-floor-select').value,
-                     items: [] 
+                      name: card.querySelector('.area-name-input').value || '未命名區域',
+                      floorOut: card.querySelector('.area-out-floor-select').value,
+                      floorIn: card.querySelector('.area-in-floor-select').value,
+                      items: [] 
                 };
             });
 
             const payload = {
-                basic: userData.basic,           
-                locations: userData.locations,   
+                basic: userData.basic,            
+                locations: userData.locations,    
                 packingDetails: packingDetailsData, 
-                areas: areasData,                
-                specialNotes: notes,             
-                totalFee: totalFee,              
-                guideHtml: guideContent,         
-                images: imagesData               
+                areas: areasData,                 
+                specialNotes: notes,              
+                totalFee: totalFee,               
+                guideHtml: guideContent,          
+                images: imagesData,
+                signature: signatureData               
             };
 
             const res = await callBackendAPI('processBooking', payload);
@@ -1441,8 +1454,6 @@
                 
                 document.getElementById('action-buttons').style.display = 'none';
                 document.getElementById('btn-line-connect').classList.remove('hidden');
-                
-                autoSaveProgress(6, { isSent: "是 (已預約)" });
             } else {
                 throw new Error(res.error);
             }
@@ -1494,4 +1505,5 @@
     }
 
 </script>
+
 </html>
