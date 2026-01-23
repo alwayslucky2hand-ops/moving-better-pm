@@ -1499,6 +1499,7 @@ async function handleBooking() {
         }
 
         // 整理打包區域資料 (Packing Details)
+        // 整理打包區域資料 (Packing Details) - 修正版：抓取完整細節
         const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
             const outSel = card.querySelector('.move-out-select');
             const inSel = card.querySelector('.move-in-select');
@@ -1512,7 +1513,10 @@ async function handleBooking() {
                     name: row.querySelector('.item-name').innerText, 
                     qty: row.querySelector('.val-qty').value,
                     tags: row.querySelector('.item-tags-detail')?.innerText || '', 
-                    risk: row.querySelector('.item-risk-text')?.innerText || '',    
+                    risk: row.querySelector('.item-risk-text')?.innerText || '',
+                    // [新增] 抓取準備工具文字
+                    materials: row.querySelector('.item-materials')?.innerText || '',
+                    // [重點] 抓取 SOP 完整文字
                     sop: row.querySelector('.item-sop')?.innerText || ''            
                 }))
             };
