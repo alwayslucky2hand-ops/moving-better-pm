@@ -496,6 +496,59 @@
     </div>
   </template>
 
+  <template id="tpl-packing-item">
+    <div class="item-card relative group bg-white shadow-sm mt-3 border border-gray-200 rounded-xl overflow-hidden">
+      <div class="item-header flex justify-between items-start p-3 cursor-pointer bg-gray-50 hover:bg-gray-100 transition" onclick="toggleItem(this)">
+         <div class="flex items-start flex-1 gap-2">
+            <i class="toggle-icon-item fas fa-chevron-right mt-1 text-gray-400 transition-transform duration-300"></i>
+            <div>
+               <div class="flex items-center gap-2">
+                  <span class="item-name font-bold text-gray-800 text-sm">物品名稱</span>
+                  <span class="text-xs text-gray-400">x</span>
+                  <span class="item-qty font-bold text-brand-dark">1</span>
+               </div>
+               <div class="item-tags-detail text-[10px] text-gray-500 mt-1 bg-white border border-gray-200 px-2 py-0.5 rounded-full inline-block"></div>
+            </div>
+         </div>
+         <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+            <input type="number" class="val-qty w-12 h-8 border border-gray-300 rounded text-center text-sm focus:border-brand-teal outline-none" value="1" min="1" onchange="calcStep2Total()">
+            <button class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition" onclick="removeItem(event, this)">
+               <i class="fas fa-times"></i>
+            </button>
+         </div>
+      </div>
+
+      <div class="item-body hidden bg-white p-4 border-t border-gray-100">
+         
+         <div class="mb-4">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-brand-teal uppercase mb-2">
+               <i class="fas fa-clipboard-list"></i> 整理師 SOP 指引
+            </label>
+            <div class="item-sop text-xs text-gray-600 leading-relaxed space-y-1 bg-teal-50/30 p-3 rounded-lg border border-teal-100">
+               </div>
+         </div>
+
+         <div class="mb-3">
+            <label class="flex items-center gap-2 text-[11px] font-bold text-gray-500 uppercase mb-1">
+               <i class="fas fa-box-open"></i> 建議包材與工具
+            </label>
+            <div class="item-materials text-xs text-gray-600 bg-gray-50 p-2 rounded"></div>
+         </div>
+
+         <div class="item-risk hidden mb-2 bg-red-50 border-l-4 border-red-400 p-2 rounded-r">
+            <div class="flex items-start gap-2">
+               <i class="fas fa-exclamation-triangle text-red-500 mt-0.5 text-xs"></i>
+               <span class="item-risk-text text-xs text-red-700 font-bold"></span>
+            </div>
+         </div>
+
+         <div class="item-summary hidden bg-yellow-50 p-2 rounded text-center">
+            <div class="item-summary-text text-xs text-yellow-800 italic"></div>
+         </div>
+      </div>
+    </div>
+  </template>
+
   <template id="tpl-ai-item-row">
     <div class="item-card relative group bg-white shadow-sm mt-3 border border-gray-200 rounded-xl overflow-hidden">
       <div class="item-header flex justify-between items-start" onclick="toggleAiItem(this)">
