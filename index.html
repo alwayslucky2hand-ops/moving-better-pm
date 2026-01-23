@@ -6,7 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>搬家帥岳-搬家規劃書系統</title>
 
-<script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
     (function() {
         // 設定你的 GAS 部署網址
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycby26aVxlIh5jgj9nKH2AqKCDc5RK0cfpSdr3XEQ8eRmkJrvG-b5YFYnp-MzMZiO72IjHw/exec";
@@ -26,7 +34,7 @@
             }
         };
 
-        // 使用 Proxy 攔截所有函式呼叫
+        // 使用 Proxy 攔截呼叫
         const handler = {
             get: function(target, prop) {
                 if (prop === 'withSuccessHandler' || prop === 'withFailureHandler' || prop.startsWith('_')) {
@@ -34,15 +42,34 @@
                 }
 
                 return function(...args) {
-                    console.log(`[GAS Adapter] Calling server function: ${prop}`, args);
+                    console.log(`[GAS Adapter] 呼叫後端功能: ${prop}`, args);
 
-                    // [修正點] 同時發送多種參數名稱，確保後端能讀取到 action
+                    // [重點修正] 這裡必須送出 'action'，因為你的 GAS 後端是用 request.action 來判斷
+                    // 同時我也送出 func/functionName 以防萬一
                     const payload = JSON.stringify({
-                        action: prop,       // 後端通常檢查這個
-                        func: prop,         // 備用
-                        functionName: prop, // 備用
-                        parameters: args,
-                        params: args        // 備用
+                        action: prop,       // <--- 這是修復 undefined 錯誤的關鍵
+                        functionName: prop, 
+                        // 針對不同函式，包裝參數結構以符合後端預期
+                        // 這裡將參數陣列直接傳送，後端需對應解構 (依照你提供的 GAS 邏輯，參數通常是單一物件或多個)
+                        // 為了通用性，我們將參數陣列直接命名為 parameters，但也針對特定函式做特化處理
+                        images: (prop === 'analyzeAccessImages' || prop === 'analyzePackingImages') ? args[0] : null,
+                        base64Image: (prop === 'callGeminiApi') ? args[0] : null,
+                        mimeType: (prop === 'callGeminiApi') ? args[1] : null,
+                        areaName: (prop === 'callGeminiApi') ? args[2] : null,
+                        floorInfo: (prop === 'callGeminiApi') ? args[3] : null,
+                        
+                        // 針對 calculateFullQuote
+                        req: (prop === 'calculateFullQuote') ? args[0] : null,
+                        rowNum: (prop === 'calculateFullQuote') ? args[1] : null,
+
+                        // 針對 generateMovingGuide
+                        fullData: (prop === 'generateMovingGuide') ? args[0] : null,
+
+                        // 針對 processBooking, logUserProgress
+                        data: (prop === 'processBooking' || prop === 'logUserProgress') ? args[0] : null,
+
+                        // 針對 checkReferrerCode
+                        code: (prop === 'checkReferrerCode') ? args[0] : null
                     });
 
                     fetch(GAS_API_URL, {
@@ -60,6 +87,13 @@
                         console.error(`[GAS Adapter] Error calling ${prop}:`, err);
                         if (target._failureHandler) {
                             target._failureHandler(err);
+                        } else {
+                            // 使用 SweetAlert 取代 alert
+                            Swal.fire({
+                                title: '連線錯誤',
+                                text: '無法連接到伺服器，請檢查網路。',
+                                icon: 'error'
+                            });
                         }
                     })
                     .finally(() => {
@@ -73,15 +107,6 @@
         window.google.script.run = new Proxy(window.google.script.run, handler);
     })();
   </script>
-
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
 
   <script>
     tailwind.config = {
@@ -98,7 +123,7 @@
 
 <style>
     /* =========================================
-       1. 基礎設定 (保留原設定)
+       1. 基礎設定
        ========================================= */
     body { background-color: #FDFBF5; color: #2A2A2A; -webkit-font-smoothing: antialiased; padding-bottom: 80px; }
       
@@ -107,8 +132,7 @@
     details > summary::marker { display: none; }
 
     /* =========================================
-       2. [優化] 步驟區塊與動畫
-       目標：支援瀑布流顯示，且滑動時不被 Header 擋住
+       2. 動畫與區塊
        ========================================= */
     .step-section { 
         display: none; 
@@ -127,10 +151,8 @@
         to { opacity: 1; transform: translateY(0); } 
     }
 
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
     /* =========================================
-       3. UI 元件 (保留原設定)
+       3. UI 元件
        ========================================= */
     .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.03); margin-bottom: 16px; position: relative; }
     .input-field, .select-field, textarea { width: 100%; padding: 12px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px; font-size: 15px; outline: none; transition: all 0.2s; }
@@ -499,10 +521,10 @@
         break-inside: avoid;
         page-break-inside: avoid;
     }
+    
+    /* 8. SweetAlert 隱藏 */
+    .swal2-container { display: none !important; }
 }
-
-
-
 </style>
 
 
@@ -1022,34 +1044,34 @@
     </div>
   </template>
 </body>
-
-<script>
+  <script>
     // ==========================================
-    // 0. [Fix] 自動載入 SweetAlert2 以解決 Google Sites 封鎖 alert 的問題
+    // 0. [核心] SweetAlert2 輔助函式 (解決 Google Sites 彈窗封鎖)
     // ==========================================
-    (function() {
-        if (!window.Swal) {
-            const script = document.createElement('script');
-            script.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
-            document.head.appendChild(script);
-        }
-    })();
-
-    // 輔助函式：統一處理訊息顯示 (取代 alert)
+    
+    // 顯示訊息 (取代 alert)
     function showMsg(title, text = '', icon = 'info') {
         if (typeof Swal !== 'undefined') {
-            return Swal.fire({ title, text, icon, confirmButtonColor: '#FDB813', confirmButtonText: '知道了' });
+            return Swal.fire({
+                title: title,
+                text: text,
+                icon: icon,
+                confirmButtonColor: '#FDB813',
+                confirmButtonText: '知道了',
+                heightAuto: false // 避免在 iframe 中跑版
+            });
         } else {
             console.log(`[${icon}] ${title}: ${text}`);
-            // Fallback: 簡單的非阻塞提示框
-            const msgBox = document.createElement('div');
-            msgBox.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:white;padding:15px 25px;border-radius:50px;z-index:9999;box-shadow:0 4px 10px rgba(0,0,0,0.3);font-size:14px;">${title} ${text}</div>`;
-            document.body.appendChild(msgBox);
-            setTimeout(() => msgBox.remove(), 3000);
+            // Fallback
+            const msg = document.createElement('div');
+            msg.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:9999;text-align:center;";
+            msg.innerHTML = `<strong>${title}</strong><br>${text}`;
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 3000);
         }
     }
 
-    // 輔助函式：統一處理確認對話框 (取代 confirm)
+    // 顯示確認框 (取代 confirm) - 回傳 Promise<boolean>
     async function showConfirm(title, text = '') {
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
@@ -1060,11 +1082,13 @@
                 confirmButtonColor: '#2A2A2A',
                 cancelButtonColor: '#d33',
                 confirmButtonText: '確定',
-                cancelButtonText: '取消'
+                cancelButtonText: '取消',
+                heightAuto: false
             });
             return result.isConfirmed;
         } else {
-            return true; // 如果沒載入 SweetAlert，默認允許 (因 Google Sites 封鎖 confirm)
+            // 在無法載入 Swal 的極端情況下，預設回傳 true 以免流程卡死
+            return true; 
         }
     }
 
@@ -1081,6 +1105,7 @@
     // 簽名板變數
     let signaturePad = { canvas: null, ctx: null, isDrawing: false };
 
+    // 台灣行政區資料
     const TAIWAN_DATA = { 
         "基隆市": ["仁愛區", "信義區", "中正區", "中山區", "安樂區", "暖暖區", "七堵區"],
         "臺北市": ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "北投區", "內湖區", "南港區", "文山區"],
@@ -1135,6 +1160,7 @@
             
             setBtnLoading(btnNext, true);
             
+            // 呼叫 GAS (轉接器會自動補上 action: 'checkReferrerCode')
             google.script.run
                 .withSuccessHandler(isValid => {
                     setBtnLoading(btnNext, false);
@@ -1442,7 +1468,7 @@
         container.innerHTML = html;
     }
 
-    // --- Step 5 -> 6 指南生成 ---
+    // --- Step 5 -> 6 指南生成 (資料抓取強化版) ---
     function generateGuide() {
         const loadingEl = document.getElementById('guide-loading');
         const contentEl = document.getElementById('guide-content');
@@ -1450,6 +1476,7 @@
         loadingEl.classList.remove('hidden');
         contentEl.innerHTML = ''; 
 
+        // 1. 收集 Step 3 (區域家具) 資料
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
             return {
                  name: card.querySelector('.area-name-input').value,
@@ -1467,6 +1494,7 @@
             };
         });
 
+        // 2. 收集 Step 2 (打包區域) 資料
         const packingData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
             return {
                 name: card.querySelector('.area-name-input').value || '打包區域',
@@ -1479,6 +1507,7 @@
             };
         });
 
+        // 準備完整請求資料
         const fullData = {
             basic: userData.basic, 
             locations: userData.locations, 
@@ -1769,7 +1798,6 @@
     }
 
     function getStep1Data() { return Array.from(document.querySelectorAll('.location-card')).map(c => ({ id: c.dataset.id, type: c.dataset.type, city: c.querySelector('.city-select')?.value || '', area: c.querySelector('.dist-select')?.value || '', addr: c.querySelector('.addr-input')?.value || '', floor: c.dataset.hasElev!=='false' ? (c.querySelector('.floor-input-val')?.value || '') : (c.querySelector('.floor-btn-val')?.value || ''), hasElevator: c.dataset.hasElev!=='false', distance: c.querySelector('.dist-input')?.value || 0, pushUnits: c.querySelector('.dist-input')?.value || 0, craneHours: c.querySelector('.crane-input')?.value || 0, transferCount: c.querySelector('.transfer-input')?.value || 0, riskNote: c.querySelector('.risk-note')?.value || '' })); }
-    
     function updateLocationOptions(step1Data) { if(!step1Data) return; locationOptions.out = step1Data.filter(l => l.type === 'out').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); locationOptions.in = step1Data.filter(l => l.type === 'in').map((l, idx) => { const nameStr = `${idx+1}. ${l.city}${l.area}`; return { id: l.id, name: nameStr, floors: l.floor.split(',') }; }); document.querySelectorAll('.packing-card').forEach(card => { populateLocationSelects(card); updateFloorSelect(card.querySelector('.move-out-select'), 'out'); updateFloorSelect(card.querySelector('.move-in-select'), 'in'); updateCollapsedInfo(card.querySelector('.move-out-select')); }); }
     function populateLocationSelects(card) { const outSel = card.querySelector('.move-out-select') || card.querySelector('.area-move-out-select'); const inSel = card.querySelector('.move-in-select') || card.querySelector('.area-move-in-select'); if(!outSel || !inSel) return; const v1 = outSel.value; const v2 = inSel.value; outSel.innerHTML = '<option value="">選擇地點</option>'; inSel.innerHTML = '<option value="">選擇地點</option>'; locationOptions.out.forEach(o => outSel.add(new Option(o.name, o.id))); locationOptions.in.forEach(o => inSel.add(new Option(o.name, o.id))); outSel.value = v1; inSel.value = v2; }
     function updateFloorSelect(sel, type) { if(!sel) return; const locId = sel.value; const card = sel.closest('.dynamic-card'); let selectorClass = ''; if (type === 'out') { selectorClass = card.classList.contains('area-card') ? '.area-out-floor-select' : '.move-out-floor-select'; } else { selectorClass = card.classList.contains('area-card') ? '.area-in-floor-select' : '.move-in-floor-select'; } const targetEl = card.querySelector(selectorClass); if(targetEl) { const oldVal = targetEl.value; targetEl.innerHTML = '<option value="">選擇樓層</option>'; const list = type === 'out' ? locationOptions.out : locationOptions.in; const loc = list.find(l => l.id === locId); if (loc && loc.floors) { loc.floors.forEach(f => { if(f.trim()) targetEl.add(new Option(f.trim(), f.trim())); }); } if(oldVal && targetEl.querySelector(`option[value="${oldVal}"]`)) targetEl.value = oldVal; else if(targetEl.options.length > 1) targetEl.selectedIndex = 1; } }
@@ -1796,6 +1824,8 @@
     function parseAndRenderAiResult(text, container) { if (!text || text.startsWith('錯誤')) return; const lines = text.trim().split('\n').filter(l => l.trim() !== ''); const tpl = document.getElementById('tpl-ai-item-row'); for (let i = 0; i < lines.length; i++) { const line = lines[i].trim(); if (line.startsWith('區域：') || line.startsWith('【')) continue; const nextLine = lines[i+1] ? lines[i+1].trim() : ''; if (nextLine.startsWith('【')) { const match = line.match(/(.+) \* (\d+)/); const name = match ? match[1].trim() : line; const qty = match ? match[2].trim() : '1'; const attrs = nextLine.match(/【.*?】/g)?.map(s => s.replace(/[【】]/g, '')) || []; let type='', mat='', diff='', dis=''; const KNOWN_DIFFS = ["一人可搬", "二人可搬", "一人技術搬", "二人技術搬", "特殊技法搬"]; const KNOWN_DIS = ["無需拆裝", "簡易拆裝", "複雜拆裝", "系統拆裝", "特技拆裝"]; attrs.forEach(a => { if(KNOWN_DIFFS.includes(a)) diff = a; else if(KNOWN_DIS.includes(a)) dis = a; else if(["裝箱打包物", "大型傢俱", "大型家電", "中型傢俱", "中型家電", "小型傢俱"].includes(a)) type = a; else mat += a + ' '; }); if(!type && attrs.length>0) type = attrs[0]; let riskText = '', skipLines = 1; if (lines[i+2] && lines[i+2].trim().includes('風險提示')) { riskText = lines[i+2].replace(/【.*?】/g, '').replace(/^[：:]/, '').trim(); skipLines = 2; } const clone = tpl.content.cloneNode(true); const row = clone.querySelector('.item-card'); row.querySelector('.inp-name').value = name; row.querySelector('.inp-qty').value = qty; row.querySelector('.inp-type').value = type; row.querySelector('.inp-material').value = mat; row.querySelector('.inp-difficulty').value = diff || '一人可搬'; row.querySelector('.inp-disassembly').value = dis || '無需拆裝'; row.querySelector('.inp-risknote').value = riskText; updateAiItemDisplay(row.querySelector('.inp-name')); container.appendChild(row); i += skipLines; } } }
     function updateAiItemDisplay(input) { const card = input.closest('.item-card'); const name = card.querySelector('.inp-name').value; const qty = card.querySelector('.inp-qty').value; const type = card.querySelector('.inp-type').value; const mat = card.querySelector('.inp-material').value; const diff = card.querySelector('.inp-difficulty').value; const dis = card.querySelector('.inp-disassembly').value; const risk = card.querySelector('.inp-risknote').value; card.querySelector('.item-name').innerText = name; card.querySelector('.item-qty').innerText = `${qty}`; const tagContainer = card.querySelector('.item-tags-row'); let html = ''; if(type) html += `<span class="tag-std">${type}</span>`; if(mat) html += `<span class="tag-std">${mat}</span>`; let diffClass = 'tag-std'; if (diff.includes('技術') || diff.includes('特殊')) diffClass = 'tag-highlight'; html += `<span class="${diffClass}">${diff}</span>`; if(dis) html += `<span class="tag-std">${dis}</span>`; tagContainer.innerHTML = html; const riskBar = card.querySelector('.item-risk-bar'); if(risk && risk !== '無' && risk.trim() !== '') { riskBar.innerText = risk; riskBar.classList.remove('hidden'); riskBar.classList.remove('risk-bg-red', 'risk-bg-orange', 'risk-bg-green'); if (diff.includes('特殊') || diff.includes('技術')) riskBar.classList.add('risk-bg-red'); else if (diff.includes('二人')) riskBar.classList.add('risk-bg-orange'); else riskBar.classList.add('risk-bg-green'); } else { riskBar.classList.add('hidden'); } }
     function toggleAiItem(header) { const body = header.nextElementSibling; const icon = header.querySelector('.item-arrow-icon'); if(body.classList.contains('active')) { body.classList.remove('active'); icon.style.transform = 'rotate(0deg)'; } else { body.classList.add('active'); icon.style.transform = 'rotate(90deg)'; } }
+    
+    // [修正] 使用 SweetAlert2 取代 confirm
     function deleteAiItem(e, btn) { 
         e.stopPropagation(); 
         if (typeof Swal !== 'undefined') {
@@ -1806,107 +1836,97 @@
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#3085d6',
-                confirmButtonText: '是的，刪除'
+                confirmButtonText: '是的，刪除',
+                cancelButtonText: '取消',
+                heightAuto: false
             }).then((result) => {
                 if (result.isConfirmed) {
                     btn.closest('.item-card').remove();
                 }
             });
-        } else if(confirm('確定刪除此物品？')) {
-            btn.closest('.item-card').remove(); 
+        } else {
+            // Fallback for extreme cases
+            if(confirm('確定刪除此物品？')) {
+               btn.closest('.item-card').remove(); 
+            }
         }
     }
+    
     function copyAiItem(e, btn) { e.stopPropagation(); const card = btn.closest('.item-card'); const clone = card.cloneNode(true); clone.querySelectorAll('input, select, textarea').forEach(input => { const originalInput = card.querySelector(`.${Array.from(input.classList).find(c => c.startsWith('inp-'))}`); if(originalInput) input.value = originalInput.value; }); updateAiItemDisplay(clone.querySelector('.inp-name')); card.parentElement.insertBefore(clone, card.nextSibling); }
 
 // ==========================================
-// [NEW] 預約處理邏輯
+// [NEW] 預約處理邏輯 (使用 SweetAlert2)
 // ==========================================
 
 async function handleBooking() {
     const btn = document.getElementById('btn-book-now');
     
-    // [MOD] 使用 showConfirm 取代原生的 confirm
+    // [修正] 使用 await 等待使用者確認
     const isConfirmed = await showConfirm('確定要送出預約嗎？', '系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)');
     
     if (!isConfirmed) return;
 
-    // 1. UI 變更為 Loading
     const originalText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 資料上傳中...';
 
     try {
-        // 2. 準備圖片資料 (轉 Base64) - 這部分維持原樣，只傳送原始照片
         const imagesData = await prepareAllImages();
-
-        // 3. 準備文字資料 (基本資訊)
         const guideContent = document.getElementById('guide-content').innerHTML;
         const totalFee = document.getElementById('result-total-fee').innerText;
         const notes = document.getElementById('final-special-notes').value;
 
-        // ============================================================
-        // [新增] 深度抓取網頁上的詳細資料，為了讓 Email 內容完整
-        // ============================================================
-
-        // (A) 抓取 [Step 2 打包區域] 的詳細資料 (含 SOP、標籤、風險)
         const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
              const outSel = card.querySelector('.move-out-select');
              const inSel = card.querySelector('.move-in-select');
-             // 輔助函式：安全取得下拉選單文字
              const getTxt = (s) => s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : '';
              
              return {
                 name: card.querySelector('.area-name-input').value || '打包區域',
-                moveOutSelect: getTxt(outSel), // 路線起點
-                moveInSelect: getTxt(inSel),   // 路線終點
+                moveOutSelect: getTxt(outSel), 
+                moveInSelect: getTxt(inSel),   
                 items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
                     name: row.querySelector('.item-name').innerText, 
                     qty: row.querySelector('.val-qty').value,
-                    tags: row.querySelector('.item-tags-detail')?.innerText || '', // 標籤
-                    risk: row.querySelector('.item-risk-text')?.innerText || '',   // 風險提示
-                    sop: row.querySelector('.item-sop')?.innerText || ''           // [重要] AI 生成的 SOP
+                    tags: row.querySelector('.item-tags-detail')?.innerText || '', 
+                    risk: row.querySelector('.item-risk-text')?.innerText || '',   
+                    sop: row.querySelector('.item-sop')?.innerText || ''           
                 }))
             };
         });
 
-        // (B) 抓取 [Step 3 搬運區域] 的摘要資料 (只抓區域與樓層，不抓細項，因為 Email 要收合)
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
             return {
                  name: card.querySelector('.area-name-input').value || '未命名區域',
                  floorOut: card.querySelector('.area-out-floor-select').value,
                  floorIn: card.querySelector('.area-in-floor-select').value,
-                 items: [] // 這裡故意留空，後端 Email 不會顯示細項
+                 items: [] 
             };
         });
 
-        // 4. 組合最終 Payload (傳送給後端的包裹)
         const payload = {
-            basic: userData.basic,           // 基本個資
-            locations: userData.locations,   // Step 1 的地點與動線全域變數
-            packingDetails: packingDetailsData, // [新] 打包詳情
-            areas: areasData,                // [新] 搬運區域摘要
-            specialNotes: notes,             // 備註
-            totalFee: totalFee,              // 總價
-            guideHtml: guideContent,         // 指南 HTML
-            images: imagesData               // 圖片 Base64
+            basic: userData.basic,           
+            locations: userData.locations,   
+            packingDetails: packingDetailsData, 
+            areas: areasData,                
+            specialNotes: notes,             
+            totalFee: totalFee,              
+            guideHtml: guideContent,         
+            images: imagesData               
         };
 
-        // 5. 傳送至後端
         google.script.run
             .withSuccessHandler(res => {
                 if (res.success) {
-                    // 成功狀態
                     btn.innerHTML = '<i class="fas fa-check"></i> 預約成功';
                     btn.classList.remove('bg-brand-dark');
                     btn.classList.add('bg-green-600');
                     
                     showMsg('🎉 預約資料已成功送出！', '確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。', 'success');
                     
-                    // 隱藏操作按鈕，顯示 LINE 按鈕
                     document.getElementById('action-buttons').style.display = 'none';
                     document.getElementById('btn-line-connect').classList.remove('hidden');
                     
-                    // 紀錄進度 (已完成預約)
                     autoSaveProgress(6, { isSent: "是 (已預約)" });
                 } else {
                     throw new Error(res.error);
@@ -1928,13 +1948,11 @@ async function handleBooking() {
 // [輔助] 將所有圖片轉為 Base64 並分類
 async function prepareAllImages() {
     const result = {
-        route: [],   // 對應 1_動線照片
-        packing: [], // 對應 2_整理打包照片
-        item: []     // 對應 3_搬運物件照片
+        route: [],   
+        packing: [], 
+        item: []     
     };
 
-    // 1. 處理 Step 1 (動線) & Step 2 (打包) 的圖片
-    // cardImages 結構為 { cardId: [ {file, category}, ... ] }
     for (const cardId in cardImages) {
         const images = cardImages[cardId];
         for (const imgObj of images) {
@@ -1945,7 +1963,6 @@ async function prepareAllImages() {
                 base64: base64 
             };
 
-            // 分類邏輯
             if (['indoor', 'path', 'park'].includes(imgObj.category)) {
                 result.route.push(payload);
             } else if (imgObj.category === 'packing') {
@@ -1954,8 +1971,6 @@ async function prepareAllImages() {
         }
     }
 
-    // 2. 處理 Step 3 (搬運物件) 的圖片
-    // areaFilesStore 結構為 Map<areaId, [ {id, file, processed}, ... ]>
     for (const [areaId, files] of areaFilesStore.entries()) {
         for (const fileObj of files) {
             const base64 = await fileToBase64(fileObj.file);
@@ -1975,8 +1990,6 @@ function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-            // result 格式為 "data:image/jpeg;base64,......"
-            // 我們只需要逗號後面的 Base64 字串
             const result = reader.result;
             const base64 = result.split(',')[1];
             resolve(base64);
@@ -1987,5 +2000,4 @@ function fileToBase64(file) {
 }
 
 </script>
-          
 </html>
