@@ -366,6 +366,7 @@
                     <button id="btn-book-now" onclick="handleBooking()" class="flex-1 py-3 bg-brand-dark text-white rounded-xl font-bold hover:bg-gray-800 text-sm shadow-lg flex items-center justify-center gap-2"><i class="fas fa-paper-plane"></i> 確認預約並發送資料</button>
                 </div>
                 <a id="btn-line-connect" href="https://line.me/R/ti/p/@movingbetter" target="_blank" class="hidden w-full py-4 bg-[#06C755] text-white rounded-xl font-bold hover:bg-[#05b64d] text-base shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 animate-pulse"><i class="fab fa-line text-2xl"></i> 資料已傳送！點此前往 LINE 官方帳號</a>
+                <div id="booking-status-msg" class="text-center text-xs mt-2 font-bold transition-all"></div>
             </div>
         </div>
     </div>
@@ -1463,21 +1464,33 @@ function initSignaturePad() {
     // ==========================================
 async function handleBooking() {
     const btn = document.getElementById('btn-book-now');
-    
-    // 1. 確認提示
-    if (!confirm('確定要送出預約嗎？\n系統將會上傳您的照片並寄發確認信件。\n(檔案較大時請耐心等候 10-30 秒)')) return;
-
-    // 2. 按鈕狀態鎖定
+    const actionBtns = document.getElementById('action-buttons');
     const originalText = btn.innerHTML;
+    
+    // 建立一個簡單的確認邏輯（避開原生 confirm）
+    // 如果你還沒做 UI 彈窗，這裡我們先用「點兩次」或「直接執行」確保不被擋
+    if (!btn.dataset.confirmed) {
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 確定送出？(請再點一次)';
+        btn.classList.replace('bg-brand-dark', 'bg-red-500');
+        btn.dataset.confirmed = "true";
+        // 3秒後恢復
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.replace('bg-red-500', 'bg-brand-dark');
+            delete btn.dataset.confirmed;
+        }, 3000);
+        return;
+    }
+
+    // 開始執行上傳流程
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 資料上傳中...';
 
     try {
         console.log("開始準備圖片資料...");
         const imagesData = await prepareAllImages();
-        console.log("圖片資料準備完成");
-
-        // 3. 收集資料
+        
+        // 收集資料
         const guideContent = document.getElementById('guide-content').innerHTML;
         const totalFeeText = document.getElementById('result-total-fee').innerText;
         const notes = document.getElementById('final-special-notes').value;
@@ -1488,7 +1501,6 @@ async function handleBooking() {
              catch(e) { console.warn("簽名處理略過:", e); }
         }
 
-        // [Step 2] 打包資料 (維持 innerHTML 抓取以保留 SOP 格式)
         const packingDetailsData = Array.from(document.querySelectorAll('.packing-card')).map(card => {
             const outSel = card.querySelector('.move-out-select');
             const inSel = card.querySelector('.move-in-select');
@@ -1508,7 +1520,6 @@ async function handleBooking() {
             };
         });
 
-        // [Step 3] 搬運資料 (確保抓取風險與難度)
         const areasData = Array.from(document.querySelectorAll('.area-card')).map(card => {
              const outFloorSel = card.querySelector('.area-out-floor-select');
              const inFloorSel = card.querySelector('.area-in-floor-select');
@@ -1519,14 +1530,13 @@ async function handleBooking() {
                    items: Array.from(card.querySelectorAll('.item-card')).map(row => ({
                         name: row.querySelector('.item-name').value || row.querySelector('.inp-name').value,
                         qty: row.querySelector('.item-qty').innerText || row.querySelector('.inp-qty').value,
-                        difficulty: row.querySelector('.inp-difficulty')?.value || '一人可搬', // 難度
-                        disassembly: row.querySelector('.inp-disassembly')?.value || '無需拆裝', // 拆裝
-                        riskNote: row.querySelector('.inp-risknote')?.value || '' // 風險提示
+                        difficulty: row.querySelector('.inp-difficulty')?.value || '一人可搬',
+                        disassembly: row.querySelector('.inp-disassembly')?.value || '無需拆裝',
+                        riskNote: row.querySelector('.inp-risknote')?.value || ''
                    })) 
              };
         });
 
-        // [Step 5] 費用明細抓取 (新增：直接抓取前端顯示的文字描述)
         const getCostText = (id) => document.getElementById(id)?.innerText || '';
         const costDetails = {
             base: { desc: getCostText('desc-base-fee'), val: getCostText('cost-base-fee') },
@@ -1539,7 +1549,6 @@ async function handleBooking() {
             organizing: { desc: getCostText('desc-organizing-fee'), val: getCostText('cost-organizing-fee') }
         };
 
-        // 4. 建構 Payload
         const payload = {
             basic: userData.basic || {}, 
             locations: userData.locations || [],   
@@ -1551,33 +1560,29 @@ async function handleBooking() {
             guideHtml: guideContent,           
             images: imagesData,
             signature: signatureData,
-            // [新增] 傳送前端抓取的費用明細文字
             costDetails: costDetails 
         };
 
-        console.log("準備發送 payload", payload); 
-
-        // 5. 呼叫後端 API
         const res = await callBackendAPI('processBooking', payload);
-        console.log("後端回應", res);
 
-        // 6. 處理回應
         if (res.success) {
-            btn.innerHTML = '<i class="fas fa-check"></i> 預約成功';
-            btn.classList.remove('bg-brand-dark');
-            btn.classList.add('bg-green-600');
-            alert('🎉 預約資料已成功送出！\n確認信已寄至您的信箱。\n請點擊下方按鈕加入官方 LINE 進行後續確認。');
-            document.getElementById('action-buttons').style.display = 'none';
+            btn.innerHTML = '<i class="fas fa-check"></i> 預約已送出';
+            btn.classList.replace('bg-red-500', 'bg-green-600');
+            btn.classList.replace('bg-brand-dark', 'bg-green-600');
+            
+            // 隱藏原本的按鈕區，顯示 LINE 按鈕
+            if(actionBtns) actionBtns.style.display = 'none';
             document.getElementById('btn-line-connect').classList.remove('hidden');
         } else {
-            throw new Error(res.error || "未知錯誤");
+            throw new Error(res.error || "傳輸中斷");
         }
 
     } catch (err) {
         console.error("handleBooking 錯誤:", err);
-        alert('上傳失敗，請重試或聯繫客服：' + (err.message || err));
         btn.disabled = false;
-        btn.innerHTML = originalText;
+        btn.innerHTML = '<i class="fas fa-redo"></i> 失敗，請再試一次';
+        btn.classList.replace('bg-red-500', 'bg-brand-dark');
+        delete btn.dataset.confirmed;
     }
 }
     // [輔助] 將所有圖片轉為 Base64 並分類
